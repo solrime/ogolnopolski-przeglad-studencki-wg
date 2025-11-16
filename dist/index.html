@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Filtr AR na Twarz</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+        }
+        #video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <div id="loading">Ładowanie modelu...</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@latest"></script>
+
+    <script>
+        let model;
+        let video;
+        let canvas;
+        let ctx;
+        let isModelLoaded = false;
+
+        // Inicjalizacja
+        async function init() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Ustawienie rozmiaru canvas
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            // Ładowanie modelu
+            try {
+                model = await faceLandmarksDetection.load(
+                    faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
+                    { maxFaces: 1 }
+                );
+                isModelLoaded = true;
+                document.getElementById('loading').style.display = 'none';
+                console.log('Model załadowany!');
+            } catch (error) {
+                console.error('Błąd ładowania modelu:', error);
+                return;
+            }
+            
+            // Inicjalizacja kamery
+            await setupCamera();
+            
+            // Rozpoczęcie detekcji
+            detectFaces();
+        }
+
+        // Konfiguracja kamery
+        async function setupCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    }
+                });
+                video.srcObject = stream;
+                
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+            } catch (error) {
+                console.error('Błąd kamery:', error);
+                alert('Nie można uzyskać dostępu do kamery!');
+            }
+        }
+
+        // Główna funkcja detekcji
+        async function detectFaces() {
+            if (!isModelLoaded) return;
+            
+            const predictions = await model.estimateFaces({
+                input: video,
+                returnTensors: false,
+                flipHorizontal: false,
+                predictIrises: true
+            });
+            
+            // Czyszczenie canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Rysowanie wideo
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+            ctx.restore();
+            
+            if (predictions.length > 0) {
+                predictions.forEach(prediction => {
+                    drawFilter(prediction);
+                });
+            }
+            
+            requestAnimationFrame(detectFaces);
+        }
+
+        // Rysowanie filtra
+        function drawFilter(prediction) {
+            const keypoints = prediction.scaledMesh;
+            
+            // Punkty do filtra okularów
+            const leftEye = keypoints[33];  // Lewe oko
+            const rightEye = keypoints[263]; // Prawe oko
+            const nose = keypoints[1];      // Nos
+            
+            if (leftEye && rightEye && nose) {
+                // Obliczanie odległości między oczami
+                const eyeDistance = Math.sqrt(
+                    Math.pow(rightEye[0] - leftEye[0], 2) + 
+                    Math.pow(rightEye[1] - leftEye[1], 2)
+                );
+                
+                const glassesWidth = eyeDistance * 2.2;
+                const glassesHeight = eyeDistance * 0.8;
+                
+                // Rysowanie okularów
+                ctx.save();
+                ctx.scale(-1, 1);
+                
+                // Lewe szkło
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
+                ctx.fillRect(
+                    -leftEye[0] - glassesWidth/2,
+                    leftEye[1] - glassesHeight/2,
+                    glassesWidth,
+                    glassesHeight
+                );
+                
+                // Prawe szkło
+                ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
+                ctx.fillRect(
+                    -rightEye[0] - glassesWidth/2,
+                    rightEye[1] - glassesHeight/2,
+                    glassesWidth,
+                    glassesHeight
+                );
+                
+                // Mostek okularów
+                ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
+                ctx.fillRect(
+                    -nose[0] - glassesWidth/4,
+                    nose[1] - glassesHeight/8,
+                    glassesWidth/2,
+                    glassesHeight/4
+                );
+                
+                ctx.restore();
+                
+                // Rysowanie korony (dodatkowy filtr)
+                drawCrown(keypoints);
+            }
+        }
+
+        // Rysowanie korony
+        function drawCrown(keypoints) {
+            const forehead = keypoints[10]; // Punkt na czole
+            
+            if (forehead) {
+                ctx.save();
+                ctx.scale(-1, 1);
+                
+                const crownWidth = 100;
+                const crownHeight = 40;
+                
+                // Podstawa korony
+                ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
+                ctx.fillRect(
+                    -forehead[0] - crownWidth/2,
+                    forehead[1] - crownHeight - 20,
+                    crownWidth,
+                    crownHeight
+                );
+                
+                // Szczyty korony
+                ctx.fillStyle = 'rgba(255, 165, 0, 0.9)';
+                for (let i = 0; i < 5; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(-forehead[0] - crownWidth/2 + i * crownWidth/4, forehead[1] - crownHeight - 20);
+                    ctx.lineTo(-forehead[0] - crownWidth/2 + (i + 0.5) * crownWidth/4, forehead[1] - crownHeight - 40);
+                    ctx.lineTo(-forehead[0] - crownWidth/2 + (i + 1) * crownWidth/4, forehead[1] - crownHeight - 20);
+                    ctx.closePath();
+                    ctx.fill();
+                }
+                
+                ctx.restore();
+            }
+        }
+
+        // Start aplikacji
+        window.onload = init;
+        
+        // Responsywność
+        window.onresize = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        };
+    </script>
+</body>
+</html>
