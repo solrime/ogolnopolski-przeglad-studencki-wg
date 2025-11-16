@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - kontur oka</title>
+  <title>Wykrywanie twarzy - poprawiony kontur oka</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -85,57 +85,37 @@
         maxY = Math.max(maxY, y);
       });
 
+      // Dodajemy margines wokół oka
+      const margin = 5;
       return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
+        x: minX - margin,
+        y: minY - margin,
+        width: (maxX - minX) + margin * 2,
+        height: (maxY - minY) + margin * 2
       };
     }
 
     function drawInvertedEyeShape(video, landmarks, eyeIndices) {
-      // Tworzymy tymczasowy canvas
       const bbox = getEyeBoundingBox(landmarks, eyeIndices);
+      
+      // Tworzymy tymczasowy canvas
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
-      
       tempCanvas.width = bbox.width;
       tempCanvas.height = bbox.height;
       
-      // Rysujemy obszar oka z wideo na tymczasowy canvas
+      // Rysujemy obszar oka z wideo na tymczasowy canvas (bez transformacji!)
+      tempCtx.save();
+      tempCtx.scale(-1, 1); // Odwracamy poziomo dla tymczasowego canvas
       tempCtx.drawImage(
         video,
-        bbox.x, bbox.y, bbox.width, bbox.height,
+        canvasElement.width - bbox.x - bbox.width, bbox.y, bbox.width, bbox.height,
         0, 0, bbox.width, bbox.height
       );
+      tempCtx.restore();
       
-      // Tworzymy maskę w kształcie oka
-      const maskCanvas = document.createElement('canvas');
-      const maskCtx = maskCanvas.getContext('2d');
-      maskCanvas.width = bbox.width;
-      maskCanvas.height = bbox.height;
-      
-      // Rysujemy kontur oka na masce
-      maskCtx.beginPath();
-      for (let i = 0; i < eyeIndices.length; i++) {
-        const index = eyeIndices[i];
-        const x = (landmarks[index].x * canvasElement.width) - bbox.x;
-        const y = (landmarks[index].y * canvasElement.height) - bbox.y;
-        
-        if (i === 0) {
-          maskCtx.moveTo(x, y);
-        } else {
-          maskCtx.lineTo(x, y);
-        }
-      }
-      maskCtx.closePath();
-      maskCtx.clip();
-      
-      // Kopiujemy obraz oka na maskę
-      maskCtx.drawImage(tempCanvas, 0, 0);
-      
-      // Pobieramy dane obrazu z maski
-      const imageData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+      // Pobieramy dane obrazu
+      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
       const data = imageData.data;
       
       // Odwracamy kolory (negatyw)
@@ -146,10 +126,12 @@
       }
       
       // Wstawiamy zmodyfikowany obraz z powrotem
-      maskCtx.putImageData(imageData, 0, 0);
+      tempCtx.putImageData(imageData, 0, 0);
       
-      // Rysujemy odwrócony obszar na głównym canvas
+      // Rysujemy na głównym canvas z odpowiednim przycięciem
       canvasCtx.save();
+      
+      // Tworzymy ścieżkę przycięcia w kształcie oka
       canvasCtx.beginPath();
       for (let i = 0; i < eyeIndices.length; i++) {
         const index = eyeIndices[i];
@@ -164,7 +146,10 @@
       }
       canvasCtx.closePath();
       canvasCtx.clip();
-      canvasCtx.drawImage(maskCanvas, bbox.x, bbox.y);
+      
+      // Rysujemy odwrócony obraz w przyciętym obszarze
+      canvasCtx.drawImage(tempCanvas, bbox.x, bbox.y, bbox.width, bbox.height);
+      
       canvasCtx.restore();
     }
 
