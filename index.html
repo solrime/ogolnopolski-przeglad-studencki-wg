@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - prostokąty</title>
+  <title>Wykrywanie twarzy - aureola</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -72,84 +72,101 @@
       canvasElement.height = window.innerHeight;
     }
 
-    function getBoundingBox(landmarks, indices) {
+    function drawHalo(landmarks) {
+      if (!landmarks) return;
+
+      // Punkty konturu twarzy (0-16) + dodatkowe punkty dla lepszego kształtu
+      const faceOutlineIndices = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
+
+      // Znajdź środek i promień aureoli
+      let centerX = 0;
+      let centerY = 0;
       let minX = Infinity, minY = Infinity;
       let maxX = -Infinity, maxY = -Infinity;
 
-      indices.forEach(index => {
+      faceOutlineIndices.forEach(index => {
         const x = landmarks[index].x * canvasElement.width;
         const y = landmarks[index].y * canvasElement.height;
+        centerX += x;
+        centerY += y;
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
       });
 
-      return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
-      };
-    }
-
-    function drawFaceRectangles(landmarks) {
-      if (!landmarks) return;
-
-      // Definicje punktów dla różnych części twarzy
-      const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
-      const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
-      const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
-      const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
-      const mouthInnerIndices = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191];
-
-      // Pobierz bounding boxy
-      const leftEyeBox = getBoundingBox(landmarks, leftEyeIndices);
-      const rightEyeBox = getBoundingBox(landmarks, rightEyeIndices);
-      const noseBox = getBoundingBox(landmarks, noseIndices);
-      const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
-
-      // Rysuj prostokąty
+      centerX /= faceOutlineIndices.length;
+      centerY /= faceOutlineIndices.length;
       
-      // Lewe oko - niebieski
-      canvasCtx.strokeStyle = '#00ffff';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
-      canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-      canvasCtx.fillRect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
-      canvasCtx.fillStyle = '#00ffff';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Lewe oko', leftEyeBox.x, leftEyeBox.y - 5);
+      const width = maxX - minX;
+      const height = maxY - minY;
+      const radius = Math.max(width, height) * 0.8;
 
-      // Prawe oko - zielony
-      canvasCtx.strokeStyle = '#00ff00';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(rightEyeBox.x, rightEyeBox.y, rightEyeBox.width, rightEyeBox.height);
-      canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-      canvasCtx.fillRect(rightEyeBox.x, rightEyeBox.y, rightEyeBox.width, rightEyeBox.height);
-      canvasCtx.fillStyle = '#00ff00';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Prawe oko', rightEyeBox.x, rightEyeBox.y - 5);
+      // Rysuj aureolę z efektem świecenia
+      const gradient = canvasCtx.createRadialGradient(
+        centerX, centerY, radius * 0.7,
+        centerX, centerY, radius
+      );
+      
+      gradient.addColorStop(0, 'rgba(255, 215, 0, 0.3)');
+      gradient.addColorStop(0.5, 'rgba(255, 215, 0, 0.1)');
+      gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
 
-      // Nos - żółty
-      canvasCtx.strokeStyle = '#ffff00';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(noseBox.x, noseBox.y, noseBox.width, noseBox.height);
-      canvasCtx.fillStyle = 'rgba(255, 255, 0, 0.2)';
-      canvasCtx.fillRect(noseBox.x, noseBox.y, noseBox.width, noseBox.height);
-      canvasCtx.fillStyle = '#ffff00';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Nos', noseBox.x, noseBox.y - 5);
+      // Główna aureola
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      canvasCtx.fillStyle = gradient;
+      canvasCtx.fill();
 
-      // Usta - czerwony
-      canvasCtx.strokeStyle = '#ff0000';
+      // Zewnętrzny pierścień
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      canvasCtx.strokeStyle = 'rgba(255, 215, 0, 0.8)';
       canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(mouthBox.x, mouthBox.y, mouthBox.width, mouthBox.height);
-      canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-      canvasCtx.fillRect(mouthBox.x, mouthBox.y, mouthBox.width, mouthBox.height);
-      canvasCtx.fillStyle = '#ff0000';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Usta', mouthBox.x, mouthBox.y - 5);
+      canvasCtx.stroke();
+
+      // Wewnętrzny pierścień
+      canvasCtx.beginPath();
+      canvasCtx.arc(centerX, centerY, radius * 0.9, 0, 2 * Math.PI);
+      canvasCtx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+      canvasCtx.lineWidth = 2;
+      canvasCtx.stroke();
+
+      // Efekt promieni
+      for (let i = 0; i < 12; i++) {
+        const angle = (i * Math.PI * 2) / 12;
+        const startX = centerX + Math.cos(angle) * radius * 0.85;
+        const startY = centerY + Math.sin(angle) * radius * 0.85;
+        const endX = centerX + Math.cos(angle) * radius * 1.15;
+        const endY = centerY + Math.sin(angle) * radius * 1.15;
+
+        canvasCtx.beginPath();
+        canvasCtx.moveTo(startX, startY);
+        canvasCtx.lineTo(endX, endY);
+        canvasCtx.strokeStyle = 'rgba(255, 215, 0, 0.6)';
+        canvasCtx.lineWidth = 2;
+        canvasCtx.stroke();
+      }
+
+      // Dodaj małe gwiazdki/punkty wokół aureoli
+      for (let i = 0; i < 24; i++) {
+        const angle = (i * Math.PI * 2) / 24;
+        const x = centerX + Math.cos(angle) * radius * 1.1;
+        const y = centerY + Math.sin(angle) * radius * 1.1;
+
+        canvasCtx.beginPath();
+        canvasCtx.arc(x, y, 3, 0, 2 * Math.PI);
+        canvasCtx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        canvasCtx.fill();
+      }
+
+      // Etykieta z imieniem/nazwą
+      canvasCtx.fillStyle = 'rgba(255, 215, 0, 0.9)';
+      canvasCtx.font = 'bold 20px Arial';
+      canvasCtx.textAlign = 'center';
+      canvasCtx.fillText('AUREOLA', centerX, centerY - radius - 20);
+      canvasCtx.font = '16px Arial';
+      canvasCtx.fillText('Święty Profil', centerX, centerY - radius - 40);
     }
 
     function onResults(results) {
@@ -157,11 +174,11 @@
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        statusElement.textContent = `Wykryto ${results.multiFaceLandmarks.length} twarz(e)`;
+        statusElement.textContent = `Wykryto ${results.multiFaceLandmarks.length} twarz(e) z aureolą`;
         
-        // Rysowanie prostokątów dla każdej twarzy
+        // Rysowanie aureoli dla każdej twarzy
         results.multiFaceLandmarks.forEach(landmarks => {
-          drawFaceRectangles(landmarks);
+          drawHalo(landmarks);
         });
       } else {
         statusElement.textContent = "Wyszukiwanie twarzy...";
