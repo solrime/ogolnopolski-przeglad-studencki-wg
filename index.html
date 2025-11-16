@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - białe oko i brwi</title>
+  <title>Wykrywanie twarzy - kontur ust</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -83,6 +83,8 @@
       const rightEyebrowIndices = [300, 293, 334, 296, 336]; // Prawa brew
       
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
+      
+      // Definicje punktów dla ust - zewnętrzny kontur
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
       // Rysuj białe wypełnienie lewego oka
@@ -154,6 +156,41 @@
       }
       canvasCtx.closePath();
       canvasCtx.stroke();
+
+      // Rysuj kontur ust
+      canvasCtx.strokeStyle = '#ff0000';
+      canvasCtx.lineWidth = 3;
+      canvasCtx.beginPath();
+      for (let i = 0; i < mouthOuterIndices.length; i++) {
+        const index = mouthOuterIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+      
+      // Wypełnienie ust
+      canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.2)';
+      canvasCtx.beginPath();
+      for (let i = 0; i < mouthOuterIndices.length; i++) {
+        const index = mouthOuterIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.fill();
       
       // Etykiety
       function getBoundingBox(landmarks, indices) {
@@ -186,6 +223,11 @@
       canvasCtx.fillStyle = '#ff00ff';
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Prawa brew (biała)', rightEyebrowBbox.x, rightEyebrowBbox.y - 10);
+
+      const mouthBbox = getBoundingBox(landmarks, mouthOuterIndices);
+      canvasCtx.fillStyle = '#ff0000';
+      canvasCtx.font = '14px Arial';
+      canvasCtx.fillText('Usta', mouthBbox.x, mouthBbox.y - 10);
 
       // Rysuj kontur prawego oka
       canvasCtx.strokeStyle = '#00ff00';
@@ -228,11 +270,8 @@
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Prawe oko', rightEyeBbox.x, rightEyeBbox.y - 10);
 
-      // Pobierz bounding boxy dla nosa i ust
-      const noseBox = getBoundingBox(landmarks, noseIndices);
-      const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
-
       // Nos - żółty prostokąt
+      const noseBox = getBoundingBox(landmarks, noseIndices);
       canvasCtx.strokeStyle = '#ffff00';
       canvasCtx.lineWidth = 3;
       canvasCtx.strokeRect(noseBox.x, noseBox.y, noseBox.width, noseBox.height);
@@ -241,16 +280,6 @@
       canvasCtx.fillStyle = '#ffff00';
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Nos', noseBox.x, noseBox.y - 5);
-
-      // Usta - czerwony prostokąt
-      canvasCtx.strokeStyle = '#ff0000';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(mouthBox.x, mouthBox.y, mouthBox.width, mouthBox.height);
-      canvasCtx.fillStyle = 'rgba(255, 0, 0, 0.2)';
-      canvasCtx.fillRect(mouthBox.x, mouthBox.y, mouthBox.width, mouthBox.height);
-      canvasCtx.fillStyle = '#ff0000';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Usta', mouthBox.x, mouthBox.y - 5);
     }
 
     function onResults(results) {
