@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - okręgi na oczach</title>
+  <title>Wykrywanie twarzy - kontur oka</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -72,60 +72,70 @@
       canvasElement.height = window.innerHeight;
     }
 
-    function getEyeCircle(landmarks, eyeIndices) {
-      let centerX = 0, centerY = 0;
+    function getEyeBoundingBox(landmarks, eyeIndices) {
       let minX = Infinity, minY = Infinity;
       let maxX = -Infinity, maxY = -Infinity;
 
       eyeIndices.forEach(index => {
         const x = landmarks[index].x * canvasElement.width;
         const y = landmarks[index].y * canvasElement.height;
-        centerX += x;
-        centerY += y;
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
       });
 
-      centerX /= eyeIndices.length;
-      centerY /= eyeIndices.length;
-      
-      const width = maxX - minX;
-      const height = maxY - minY;
-      const radius = Math.max(width, height) * 0.7; // Zwiększony promień dla lepszego pokrycia
-
       return {
-        x: centerX,
-        y: centerY,
-        radius: radius
+        x: minX,
+        y: minY,
+        width: maxX - minX,
+        height: maxY - minY
       };
     }
 
-    function drawInvertedEyeCircle(video, eyeCircle) {
-      // Tworzymy tymczasowy canvas dla obszaru oka
+    function drawInvertedEyeShape(video, landmarks, eyeIndices) {
+      // Tworzymy tymczasowy canvas
+      const bbox = getEyeBoundingBox(landmarks, eyeIndices);
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
       
-      const diameter = eyeCircle.radius * 2;
-      tempCanvas.width = diameter;
-      tempCanvas.height = diameter;
+      tempCanvas.width = bbox.width;
+      tempCanvas.height = bbox.height;
       
       // Rysujemy obszar oka z wideo na tymczasowy canvas
-      tempCtx.save();
-      tempCtx.beginPath();
-      tempCtx.arc(eyeCircle.radius, eyeCircle.radius, eyeCircle.radius, 0, Math.PI * 2);
-      tempCtx.clip();
-      
       tempCtx.drawImage(
         video,
-        eyeCircle.x - eyeCircle.radius, eyeCircle.y - eyeCircle.radius, 
-        diameter, diameter,
-        0, 0, diameter, diameter
+        bbox.x, bbox.y, bbox.width, bbox.height,
+        0, 0, bbox.width, bbox.height
       );
       
-      // Pobieramy dane obrazu
-      const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+      // Tworzymy maskę w kształcie oka
+      const maskCanvas = document.createElement('canvas');
+      const maskCtx = maskCanvas.getContext('2d');
+      maskCanvas.width = bbox.width;
+      maskCanvas.height = bbox.height;
+      
+      // Rysujemy kontur oka na masce
+      maskCtx.beginPath();
+      for (let i = 0; i < eyeIndices.length; i++) {
+        const index = eyeIndices[i];
+        const x = (landmarks[index].x * canvasElement.width) - bbox.x;
+        const y = (landmarks[index].y * canvasElement.height) - bbox.y;
+        
+        if (i === 0) {
+          maskCtx.moveTo(x, y);
+        } else {
+          maskCtx.lineTo(x, y);
+        }
+      }
+      maskCtx.closePath();
+      maskCtx.clip();
+      
+      // Kopiujemy obraz oka na maskę
+      maskCtx.drawImage(tempCanvas, 0, 0);
+      
+      // Pobieramy dane obrazu z maski
+      const imageData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
       const data = imageData.data;
       
       // Odwracamy kolory (negatyw)
@@ -136,30 +146,104 @@
       }
       
       // Wstawiamy zmodyfikowany obraz z powrotem
-      tempCtx.putImageData(imageData, 0, 0);
-      tempCtx.restore();
+      maskCtx.putImageData(imageData, 0, 0);
       
-      // Rysujemy odwrócony obszar na głównym canvas jako okrąg
+      // Rysujemy odwrócony obszar na głównym canvas
       canvasCtx.save();
       canvasCtx.beginPath();
-      canvasCtx.arc(eyeCircle.x, eyeCircle.y, eyeCircle.radius, 0, Math.PI * 2);
+      for (let i = 0; i < eyeIndices.length; i++) {
+        const index = eyeIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
       canvasCtx.clip();
-      canvasCtx.drawImage(tempCanvas, eyeCircle.x - eyeCircle.radius, eyeCircle.y - eyeCircle.radius);
+      canvasCtx.drawImage(maskCanvas, bbox.x, bbox.y);
       canvasCtx.restore();
     }
 
     function drawFaceElements(landmarks, video) {
       if (!landmarks) return;
 
-      // Definicje punktów dla oczu
+      // Definicje punktów dla oczu - pełny kontur oka
       const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
       const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
-      // Pobierz okręgi dla oczu
-      const leftEyeCircle = getEyeCircle(landmarks, leftEyeIndices);
-      const rightEyeCircle = getEyeCircle(landmarks, rightEyeIndices);
+      // Rysuj odwrócone kolory dla lewego oka (dokładny kształt)
+      drawInvertedEyeShape(video, landmarks, leftEyeIndices);
+      
+      // Rysuj kontur lewego oka
+      canvasCtx.strokeStyle = '#00ffff';
+      canvasCtx.lineWidth = 3;
+      canvasCtx.beginPath();
+      for (let i = 0; i < leftEyeIndices.length; i++) {
+        const index = leftEyeIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+      
+      // Etykieta dla lewego oka
+      const leftEyeBbox = getEyeBoundingBox(landmarks, leftEyeIndices);
+      canvasCtx.fillStyle = '#00ffff';
+      canvasCtx.font = '14px Arial';
+      canvasCtx.fillText('Lewe oko (negatyw)', leftEyeBbox.x, leftEyeBbox.y - 10);
+
+      // Rysuj kontur prawego oka
+      canvasCtx.strokeStyle = '#00ff00';
+      canvasCtx.lineWidth = 3;
+      canvasCtx.beginPath();
+      for (let i = 0; i < rightEyeIndices.length; i++) {
+        const index = rightEyeIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+      
+      // Wypełnienie prawego oka
+      canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+      canvasCtx.beginPath();
+      for (let i = 0; i < rightEyeIndices.length; i++) {
+        const index = rightEyeIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.fill();
+      
+      // Etykieta dla prawego oka
+      const rightEyeBbox = getEyeBoundingBox(landmarks, rightEyeIndices);
+      canvasCtx.fillStyle = '#00ff00';
+      canvasCtx.font = '14px Arial';
+      canvasCtx.fillText('Prawe oko', rightEyeBbox.x, rightEyeBbox.y - 10);
 
       // Pobierz bounding boxy dla nosa i ust
       function getBoundingBox(landmarks, indices) {
@@ -185,40 +269,6 @@
 
       const noseBox = getBoundingBox(landmarks, noseIndices);
       const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
-
-      // Rysuj odwrócone kolory dla lewego oka (okrąg)
-      if (leftEyeCircle.radius > 0) {
-        drawInvertedEyeCircle(video, leftEyeCircle);
-        
-        // Rysuj obramowanie okręgu
-        canvasCtx.strokeStyle = '#00ffff';
-        canvasCtx.lineWidth = 3;
-        canvasCtx.beginPath();
-        canvasCtx.arc(leftEyeCircle.x, leftEyeCircle.y, leftEyeCircle.radius, 0, Math.PI * 2);
-        canvasCtx.stroke();
-        
-        canvasCtx.fillStyle = '#00ffff';
-        canvasCtx.font = '14px Arial';
-        canvasCtx.fillText('Lewe oko (negatyw)', leftEyeCircle.x - 40, leftEyeCircle.y - leftEyeCircle.radius - 10);
-      }
-
-      // Rysuj prawe oko jako okrąg (normalne kolory)
-      if (rightEyeCircle.radius > 0) {
-        canvasCtx.strokeStyle = '#00ff00';
-        canvasCtx.lineWidth = 3;
-        canvasCtx.beginPath();
-        canvasCtx.arc(rightEyeCircle.x, rightEyeCircle.y, rightEyeCircle.radius, 0, Math.PI * 2);
-        canvasCtx.stroke();
-        
-        canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-        canvasCtx.beginPath();
-        canvasCtx.arc(rightEyeCircle.x, rightEyeCircle.y, rightEyeCircle.radius, 0, Math.PI * 2);
-        canvasCtx.fill();
-        
-        canvasCtx.fillStyle = '#00ff00';
-        canvasCtx.font = '14px Arial';
-        canvasCtx.fillText('Prawe oko', rightEyeCircle.x - 30, rightEyeCircle.y - rightEyeCircle.radius - 10);
-      }
 
       // Nos - żółty prostokąt
       canvasCtx.strokeStyle = '#ffff00';
