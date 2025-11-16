@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy</title>
+  <title>Wykrywanie szkieletu twarzy</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
   <style>
     body {
       margin: 0;
@@ -36,7 +36,7 @@
       width: 100%;
       height: 100%;
       z-index: 10;
-      transform: scaleX(-1); /* To samo odbicie co wideo */
+      transform: scaleX(-1); /* Odbicie lustrzane canvas */
     }
     #status {
       position: absolute;
@@ -49,7 +49,7 @@
       z-index: 100;
       font-size: 16px;
       font-weight: bold;
-      transform: scaleX(-1); /* Tekst czytelny */
+      transform: scaleX(-1); /* Odbicie lustrzane tekstu */
     }
   </style>
 </head>
@@ -72,66 +72,166 @@
       canvasElement.height = window.innerHeight;
     }
 
+    function drawFaceLandmarks(landmarks) {
+      if (!landmarks) return;
+      
+      // Rysowanie konturu twarzy (punkty 0-16)
+      canvasCtx.strokeStyle = '#00ff00';
+      canvasCtx.lineWidth = 2;
+      canvasCtx.beginPath();
+      for (let i = 0; i <= 16; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+
+      // Rysowanie brwi (lewa: 17-21, prawa: 22-26)
+      canvasCtx.strokeStyle = '#ffff00';
+      canvasCtx.beginPath();
+      for (let i = 17; i <= 21; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 17) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+
+      canvasCtx.beginPath();
+      for (let i = 22; i <= 26; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 22) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+
+      // Rysowanie nosa (27-35)
+      canvasCtx.strokeStyle = '#ff00ff';
+      canvasCtx.beginPath();
+      for (let i = 27; i <= 35; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 27) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+
+      // Rysowanie oczu (lewe: 36-41, prawe: 42-47)
+      canvasCtx.strokeStyle = '#00ffff';
+      canvasCtx.beginPath();
+      for (let i = 36; i <= 41; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 36) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+
+      canvasCtx.beginPath();
+      for (let i = 42; i <= 47; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 42) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+
+      // Rysowanie ust (zewnętrzne: 48-59, wewnętrzne: 60-67)
+      canvasCtx.strokeStyle = '#ff0000';
+      canvasCtx.beginPath();
+      for (let i = 48; i <= 59; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 48) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+
+      canvasCtx.strokeStyle = '#ff6666';
+      canvasCtx.beginPath();
+      for (let i = 60; i <= 67; i++) {
+        const x = landmarks[i].x * canvasElement.width;
+        const y = landmarks[i].y * canvasElement.height;
+        if (i === 60) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
+      canvasCtx.stroke();
+    }
+
     function onResults(results) {
       // Czyszczenie canvas
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       
-      if (results.detections && results.detections.length > 0) {
-        statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        statusElement.textContent = `Wykryto ${results.multiFaceLandmarks.length} twarz(e)`;
         
-        for (let i = 0; i < results.detections.length; i++) {
-          const detection = results.detections[i];
-          const boundingBox = detection.boundingBox;
-          
-          // Konwersja współrzędnych - ODWRÓCONE bo canvas jest odbity
-          const x = (1 - boundingBox.xMin - boundingBox.width) * canvasElement.width;
-          const y = boundingBox.yMin * canvasElement.height;
-          const width = boundingBox.width * canvasElement.width;
-          const height = boundingBox.height * canvasElement.height;
-          
-          // Rysowanie prostokąta
-          canvasCtx.strokeStyle = '#00ff00';
-          canvasCtx.lineWidth = 3;
-          canvasCtx.strokeRect(x, y, width, height);
-          
-          // Dodanie etykiety
-          canvasCtx.fillStyle = '#00ff00';
-          canvasCtx.font = 'bold 20px Arial';
-          canvasCtx.fillText(`Twarz ${i+1}`, x + 5, y - 10);
-          
-          // Dodanie przezroczystego wypełnienia
-          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
-          canvasCtx.fillRect(x, y, width, height);
-        }
+        // Rysowanie szkieletu dla każdej twarzy
+        results.multiFaceLandmarks.forEach(landmarks => {
+          drawFaceLandmarks(landmarks);
+        });
       } else {
         statusElement.textContent = "Wyszukiwanie twarzy...";
       }
     }
 
-    const faceDetection = new FaceDetection({
+    const faceMesh = new FaceMesh({
       locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
       },
     });
 
-    faceDetection.setOptions({
-      model: 'short',
+    faceMesh.setOptions({
+      maxNumFaces: 2,
+      refineLandmarks: true,
       minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5,
     });
 
-    faceDetection.onResults(onResults);
+    faceMesh.onResults(onResults);
 
     const camera = new Camera(videoElement, {
       onFrame: async () => {
-        await faceDetection.send({ image: videoElement });
+        await faceMesh.send({ image: videoElement });
       },
-      width: 1280,
-      height: 720,
+      width: 640,
+      height: 480,
     });
 
     // Inicjalizacja
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    
+    // Start kamery
     camera.start().catch(error => {
       console.error('Błąd kamery:', error);
       statusElement.textContent = "Błąd kamery: " + error.message;
