@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - białe oko</title>
+  <title>Wykrywanie twarzy - białe oko i brwi</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -78,6 +78,11 @@
       // Definicje punktów dla oczu - pełny kontur oka
       const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
       const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
+      
+      // Definicje punktów dla brwi
+      const leftEyebrowIndices = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107, 336, 296, 334, 293, 300, 276, 283, 282, 295, 285];
+      const rightEyebrowIndices = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336, 107, 66, 105, 63, 70, 55, 65, 52, 53, 46];
+      
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
@@ -114,6 +119,40 @@
         }
       }
       canvasCtx.closePath();
+      canvasCtx.stroke();
+
+      // Rysuj obrys lewej brwi
+      canvasCtx.strokeStyle = '#ff00ff';
+      canvasCtx.lineWidth = 4;
+      canvasCtx.beginPath();
+      for (let i = 0; i < leftEyebrowIndices.length; i++) {
+        const index = leftEyebrowIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.stroke();
+      
+      // Rysuj obrys prawej brwi
+      canvasCtx.strokeStyle = '#ff00ff';
+      canvasCtx.lineWidth = 4;
+      canvasCtx.beginPath();
+      for (let i = 0; i < rightEyebrowIndices.length; i++) {
+        const index = rightEyebrowIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
       canvasCtx.stroke();
       
       // Etykieta dla lewego oka
