@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - odwrócone kolory oczu</title>
+  <title>Wykrywanie twarzy - okręgi na oczach</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -72,40 +72,56 @@
       canvasElement.height = window.innerHeight;
     }
 
-    function getBoundingBox(landmarks, indices) {
+    function getEyeCircle(landmarks, eyeIndices) {
+      let centerX = 0, centerY = 0;
       let minX = Infinity, minY = Infinity;
       let maxX = -Infinity, maxY = -Infinity;
 
-      indices.forEach(index => {
+      eyeIndices.forEach(index => {
         const x = landmarks[index].x * canvasElement.width;
         const y = landmarks[index].y * canvasElement.height;
+        centerX += x;
+        centerY += y;
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
       });
 
+      centerX /= eyeIndices.length;
+      centerY /= eyeIndices.length;
+      
+      const width = maxX - minX;
+      const height = maxY - minY;
+      const radius = Math.max(width, height) * 0.7; // Zwiększony promień dla lepszego pokrycia
+
       return {
-        x: minX,
-        y: minY,
-        width: maxX - minX,
-        height: maxY - minY
+        x: centerX,
+        y: centerY,
+        radius: radius
       };
     }
 
-    function drawInvertedEye(video, eyeBox) {
+    function drawInvertedEyeCircle(video, eyeCircle) {
       // Tworzymy tymczasowy canvas dla obszaru oka
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
       
-      tempCanvas.width = eyeBox.width;
-      tempCanvas.height = eyeBox.height;
+      const diameter = eyeCircle.radius * 2;
+      tempCanvas.width = diameter;
+      tempCanvas.height = diameter;
       
       // Rysujemy obszar oka z wideo na tymczasowy canvas
+      tempCtx.save();
+      tempCtx.beginPath();
+      tempCtx.arc(eyeCircle.radius, eyeCircle.radius, eyeCircle.radius, 0, Math.PI * 2);
+      tempCtx.clip();
+      
       tempCtx.drawImage(
         video,
-        eyeBox.x, eyeBox.y, eyeBox.width, eyeBox.height,
-        0, 0, eyeBox.width, eyeBox.height
+        eyeCircle.x - eyeCircle.radius, eyeCircle.y - eyeCircle.radius, 
+        diameter, diameter,
+        0, 0, diameter, diameter
       );
       
       // Pobieramy dane obrazu
@@ -117,57 +133,94 @@
         data[i] = 255 - data[i];     // R
         data[i + 1] = 255 - data[i + 1]; // G
         data[i + 2] = 255 - data[i + 2]; // B
-        // data[i + 3] pozostaje bez zmian (alpha)
       }
       
       // Wstawiamy zmodyfikowany obraz z powrotem
       tempCtx.putImageData(imageData, 0, 0);
+      tempCtx.restore();
       
-      // Rysujemy odwrócony obszar na głównym canvas
-      canvasCtx.drawImage(tempCanvas, eyeBox.x, eyeBox.y);
+      // Rysujemy odwrócony obszar na głównym canvas jako okrąg
+      canvasCtx.save();
+      canvasCtx.beginPath();
+      canvasCtx.arc(eyeCircle.x, eyeCircle.y, eyeCircle.radius, 0, Math.PI * 2);
+      canvasCtx.clip();
+      canvasCtx.drawImage(tempCanvas, eyeCircle.x - eyeCircle.radius, eyeCircle.y - eyeCircle.radius);
+      canvasCtx.restore();
     }
 
-    function drawFaceRectangles(landmarks, video) {
+    function drawFaceElements(landmarks, video) {
       if (!landmarks) return;
 
-      // Definicje punktów dla różnych części twarzy
+      // Definicje punktów dla oczu
       const leftEyeIndices = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246];
       const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
-      // Pobierz bounding boxy
-      const leftEyeBox = getBoundingBox(landmarks, leftEyeIndices);
-      const rightEyeBox = getBoundingBox(landmarks, rightEyeIndices);
+      // Pobierz okręgi dla oczu
+      const leftEyeCircle = getEyeCircle(landmarks, leftEyeIndices);
+      const rightEyeCircle = getEyeCircle(landmarks, rightEyeIndices);
+
+      // Pobierz bounding boxy dla nosa i ust
+      function getBoundingBox(landmarks, indices) {
+        let minX = Infinity, minY = Infinity;
+        let maxX = -Infinity, maxY = -Infinity;
+
+        indices.forEach(index => {
+          const x = landmarks[index].x * canvasElement.width;
+          const y = landmarks[index].y * canvasElement.height;
+          minX = Math.min(minX, x);
+          minY = Math.min(minY, y);
+          maxX = Math.max(maxX, x);
+          maxY = Math.max(maxY, y);
+        });
+
+        return {
+          x: minX,
+          y: minY,
+          width: maxX - minX,
+          height: maxY - minY
+        };
+      }
+
       const noseBox = getBoundingBox(landmarks, noseIndices);
       const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
 
-      // Rysuj odwrócone kolory dla lewego oka
-      if (leftEyeBox.width > 0 && leftEyeBox.height > 0) {
-        drawInvertedEye(video, leftEyeBox);
+      // Rysuj odwrócone kolory dla lewego oka (okrąg)
+      if (leftEyeCircle.radius > 0) {
+        drawInvertedEyeCircle(video, leftEyeCircle);
         
-        // Rysuj ramkę wokół odwróconego obszaru
+        // Rysuj obramowanie okręgu
         canvasCtx.strokeStyle = '#00ffff';
         canvasCtx.lineWidth = 3;
-        canvasCtx.strokeRect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
+        canvasCtx.beginPath();
+        canvasCtx.arc(leftEyeCircle.x, leftEyeCircle.y, leftEyeCircle.radius, 0, Math.PI * 2);
+        canvasCtx.stroke();
+        
         canvasCtx.fillStyle = '#00ffff';
         canvasCtx.font = '14px Arial';
-        canvasCtx.fillText('Lewe oko (negatyw)', leftEyeBox.x, leftEyeBox.y - 5);
+        canvasCtx.fillText('Lewe oko (negatyw)', leftEyeCircle.x - 40, leftEyeCircle.y - leftEyeCircle.radius - 10);
       }
 
-      // Rysuj prostokąty dla pozostałych części
+      // Rysuj prawe oko jako okrąg (normalne kolory)
+      if (rightEyeCircle.radius > 0) {
+        canvasCtx.strokeStyle = '#00ff00';
+        canvasCtx.lineWidth = 3;
+        canvasCtx.beginPath();
+        canvasCtx.arc(rightEyeCircle.x, rightEyeCircle.y, rightEyeCircle.radius, 0, Math.PI * 2);
+        canvasCtx.stroke();
+        
+        canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+        canvasCtx.beginPath();
+        canvasCtx.arc(rightEyeCircle.x, rightEyeCircle.y, rightEyeCircle.radius, 0, Math.PI * 2);
+        canvasCtx.fill();
+        
+        canvasCtx.fillStyle = '#00ff00';
+        canvasCtx.font = '14px Arial';
+        canvasCtx.fillText('Prawe oko', rightEyeCircle.x - 30, rightEyeCircle.y - rightEyeCircle.radius - 10);
+      }
 
-      // Prawe oko - zielony (normalne kolory)
-      canvasCtx.strokeStyle = '#00ff00';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.strokeRect(rightEyeBox.x, rightEyeBox.y, rightEyeBox.width, rightEyeBox.height);
-      canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
-      canvasCtx.fillRect(rightEyeBox.x, rightEyeBox.y, rightEyeBox.width, rightEyeBox.height);
-      canvasCtx.fillStyle = '#00ff00';
-      canvasCtx.font = '14px Arial';
-      canvasCtx.fillText('Prawe oko', rightEyeBox.x, rightEyeBox.y - 5);
-
-      // Nos - żółty
+      // Nos - żółty prostokąt
       canvasCtx.strokeStyle = '#ffff00';
       canvasCtx.lineWidth = 3;
       canvasCtx.strokeRect(noseBox.x, noseBox.y, noseBox.width, noseBox.height);
@@ -177,7 +230,7 @@
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Nos', noseBox.x, noseBox.y - 5);
 
-      // Usta - czerwony
+      // Usta - czerwony prostokąt
       canvasCtx.strokeStyle = '#ff0000';
       canvasCtx.lineWidth = 3;
       canvasCtx.strokeRect(mouthBox.x, mouthBox.y, mouthBox.width, mouthBox.height);
@@ -195,9 +248,9 @@
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         statusElement.textContent = `Wykryto ${results.multiFaceLandmarks.length} twarz(e)`;
         
-        // Rysowanie prostokątów dla każdej twarzy
+        // Rysowanie elementów dla każdej twarzy
         results.multiFaceLandmarks.forEach(landmarks => {
-          drawFaceRectangles(landmarks, videoElement);
+          drawFaceElements(landmarks, videoElement);
         });
       } else {
         statusElement.textContent = "Wyszukiwanie twarzy...";
