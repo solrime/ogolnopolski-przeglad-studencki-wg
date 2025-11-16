@@ -15,19 +15,13 @@
       font-family: Arial, sans-serif;
       overflow: hidden;
       background: black;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
     }
     #container {
-      position: relative;
-      width: 100%;
-      max-width: 1280px;
-      height: 100%;
-      max-height: 720px;
-      overflow: hidden;
-      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
     }
     #inputVideo {
       width: 100%;
@@ -55,30 +49,12 @@
       font-size: 16px;
       font-weight: bold;
     }
-    .face-box {
-      position: absolute;
-      border: 3px solid #00ff00;
-      background: rgba(0, 255, 0, 0.1);
-      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-      z-index: 20;
-      pointer-events: none;
-    }
-    .face-label {
-      position: absolute;
-      color: white;
-      background: rgba(0, 255, 0, 0.7);
-      padding: 2px 8px;
-      font-size: 14px;
-      font-weight: bold;
-      z-index: 30;
-      pointer-events: none;
-    }
   </style>
 </head>
 <body>
   <div id="container">
     <video id="inputVideo" autoplay playsinline></video>
-    <canvas id="canvas" width="1280" height="720"></canvas>
+    <canvas id="canvas"></canvas>
     <div id="status">Wyszukiwanie twarzy...</div>
   </div>
 
@@ -88,14 +64,16 @@
     const canvasCtx = canvasElement.getContext('2d');
     const statusElement = document.getElementById('status');
 
+    // Dopasowanie rozmiaru canvas do okna
+    function resizeCanvas() {
+      canvasElement.width = window.innerWidth;
+      canvasElement.height = window.innerHeight;
+    }
+
     function onResults(results) {
       // Czyszczenie canvas
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       
-      // Usuwanie poprzednich prostokątów
-      const existingBoxes = document.querySelectorAll('.face-box, .face-label');
-      existingBoxes.forEach(box => box.remove());
-
       if (results.detections && results.detections.length > 0) {
         statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
         
@@ -109,7 +87,7 @@
           const width = boundingBox.width * canvasElement.width;
           const height = boundingBox.height * canvasElement.height;
           
-          // Rysowanie prostokąta na canvas
+          // Rysowanie prostokąta
           canvasCtx.strokeStyle = '#00ff00';
           canvasCtx.lineWidth = 3;
           canvasCtx.strokeRect(x, y, width, height);
@@ -135,7 +113,7 @@
     });
 
     faceDetection.setOptions({
-      model: 'short', // 'short' jest szybszy
+      model: 'short',
       minDetectionConfidence: 0.5,
     });
 
@@ -145,11 +123,17 @@
       onFrame: async () => {
         await faceDetection.send({ image: videoElement });
       },
-      width: 1280,
-      height: 720,
+      width: 640,
+      height: 480,
     });
 
-    camera.start();
+    // Inicjalizacja
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    camera.start().catch(error => {
+      console.error('Błąd kamery:', error);
+      statusElement.textContent = "Błąd kamery: " + error.message;
+    });
   </script>
 </body>
 </html>
