@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - Debug</title>
+  <title>Wykrywanie twarzy</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -27,7 +27,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1);
+      transform: scaleX(-1); /* Odbicie lustrzane */
     }
     #canvas {
       position: absolute;
@@ -36,6 +36,7 @@
       width: 100%;
       height: 100%;
       z-index: 10;
+      transform: scaleX(-1); /* To samo odbicie co wideo */
     }
     #status {
       position: absolute;
@@ -48,145 +49,93 @@
       z-index: 100;
       font-size: 16px;
       font-weight: bold;
-    }
-    #debug {
-      position: absolute;
-      bottom: 20px;
-      left: 20px;
-      color: white;
-      background: rgba(0, 0, 0, 0.7);
-      padding: 10px 15px;
-      border-radius: 5px;
-      z-index: 100;
-      font-size: 12px;
-      max-width: 300px;
+      transform: scaleX(-1); /* Tekst czytelny */
     }
   </style>
 </head>
 <body>
   <div id="container">
-    <video id="inputVideo" autoplay playsinline muted></video>
+    <video id="inputVideo" autoplay playsinline></video>
     <canvas id="canvas"></canvas>
-    <div id="status">Ładowanie...</div>
-    <div id="debug"></div>
+    <div id="status">Wyszukiwanie twarzy...</div>
   </div>
 
   <script>
     const videoElement = document.getElementById('inputVideo');
     const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
     const statusElement = document.getElementById('status');
-    const debugElement = document.getElementById('debug');
 
-    let detectionCount = 0;
-
+    // Dopasowanie rozmiaru canvas do okna
     function resizeCanvas() {
       canvasElement.width = window.innerWidth;
       canvasElement.height = window.innerHeight;
-      debugElement.innerHTML += `Canvas: ${canvasElement.width}x${canvasElement.height}<br>`;
     }
 
     function onResults(results) {
-      const canvasCtx = canvasElement.getContext('2d');
+      // Czyszczenie canvas
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      
-      detectionCount++;
-      debugElement.innerHTML = `Detections: ${detectionCount}<br>`;
       
       if (results.detections && results.detections.length > 0) {
         statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
-        debugElement.innerHTML += `Found ${results.detections.length} face(s)<br>`;
         
         for (let i = 0; i < results.detections.length; i++) {
           const detection = results.detections[i];
           const boundingBox = detection.boundingBox;
           
-          const x = boundingBox.xMin * canvasElement.width;
+          // Konwersja współrzędnych - ODWRÓCONE bo canvas jest odbity
+          const x = (1 - boundingBox.xMin - boundingBox.width) * canvasElement.width;
           const y = boundingBox.yMin * canvasElement.height;
           const width = boundingBox.width * canvasElement.width;
           const height = boundingBox.height * canvasElement.height;
           
-          debugElement.innerHTML += `Face ${i}: ${x.toFixed(0)},${y.toFixed(0)} ${width.toFixed(0)}x${height.toFixed(0)}<br>`;
-          
-          // Duży, wyraźny prostokąt
+          // Rysowanie prostokąta
           canvasCtx.strokeStyle = '#00ff00';
-          canvasCtx.lineWidth = 4;
+          canvasCtx.lineWidth = 3;
           canvasCtx.strokeRect(x, y, width, height);
           
+          // Dodanie etykiety
           canvasCtx.fillStyle = '#00ff00';
           canvasCtx.font = 'bold 20px Arial';
-          canvasCtx.fillText(`FACE ${i+1}`, x + 10, y - 15);
+          canvasCtx.fillText(`Twarz ${i+1}`, x + 5, y - 10);
           
-          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+          // Dodanie przezroczystego wypełnienia
+          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
           canvasCtx.fillRect(x, y, width, height);
         }
       } else {
         statusElement.textContent = "Wyszukiwanie twarzy...";
-        debugElement.innerHTML += "No faces detected<br>";
-        
-        // Testowy prostokąt w rogu
-        const canvasCtx = canvasElement.getContext('2d');
-        canvasCtx.strokeStyle = 'red';
-        canvasCtx.lineWidth = 2;
-        canvasCtx.strokeRect(10, 10, 100, 100);
-        canvasCtx.fillStyle = 'red';
-        canvasCtx.font = '12px Arial';
-        canvasCtx.fillText('TEST BOX', 15, 25);
-      }
-      
-      // Ogranicz liczbę linii debug
-      if (detectionCount > 50) {
-        detectionCount = 0;
-        debugElement.innerHTML = 'Cleared debug<br>';
       }
     }
 
     const faceDetection = new FaceDetection({
       locateFile: (file) => {
         return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
-      }
+      },
     });
 
     faceDetection.setOptions({
       model: 'short',
-      minDetectionConfidence: 0.3  // Niższy próg dla lepszego wykrywania
+      minDetectionConfidence: 0.5,
     });
 
     faceDetection.onResults(onResults);
 
-    async function initCamera() {
-      try {
-        statusElement.textContent = "Uruchamianie kamery...";
-        
-        // Sprawdź czy kamera jest dostępna
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { width: 640, height: 480 } 
-        });
-        videoElement.srcObject = stream;
-        
-        const camera = new Camera(videoElement, {
-          onFrame: async () => {
-            await faceDetection.send({ image: videoElement });
-          },
-          width: 640,
-          height: 480
-        });
-
-        await camera.start();
-        statusElement.textContent = "Kamera aktywna!";
-        
-      } catch (error) {
-        console.error('Błąd kamery:', error);
-        statusElement.textContent = "Błąd: " + error.message;
-        debugElement.innerHTML = "Camera error: " + error.message;
-      }
-    }
-
-    window.addEventListener('load', () => {
-      resizeCanvas();
-      initCamera();
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await faceDetection.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720,
     });
 
+    // Inicjalizacja
+    resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    camera.start().catch(error => {
+      console.error('Błąd kamery:', error);
+      statusElement.textContent = "Błąd kamery: " + error.message;
+    });
   </script>
 </body>
 </html>
