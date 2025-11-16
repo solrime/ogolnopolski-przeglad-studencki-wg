@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - prostokąty</title>
+  <title>Wykrywanie twarzy - odwrócone kolory</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -101,22 +101,65 @@
       const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
-      const mouthInnerIndices = [78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308, 415, 310, 311, 312, 13, 82, 81, 80, 191];
+      
+      // Punkty dla aureoli wokół czoła
+      const foreheadIndices = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109];
 
       // Pobierz bounding boxy
       const leftEyeBox = getBoundingBox(landmarks, leftEyeIndices);
       const rightEyeBox = getBoundingBox(landmarks, rightEyeIndices);
       const noseBox = getBoundingBox(landmarks, noseIndices);
       const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
+      const foreheadBox = getBoundingBox(landmarks, foreheadIndices);
+
+      // Rysuj aureolę wokół czoła
+      canvasCtx.strokeStyle = '#ff00ff';
+      canvasCtx.lineWidth = 8;
+      canvasCtx.setLineDash([20, 15]); // Przerywana linia
+      canvasCtx.strokeRect(
+        foreheadBox.x - 30, 
+        foreheadBox.y - 40, 
+        foreheadBox.width + 60, 
+        foreheadBox.height + 50
+      );
+      
+      // Dodaj efekt świecenia
+      canvasCtx.shadowColor = '#ff00ff';
+      canvasCtx.shadowBlur = 20;
+      canvasCtx.strokeRect(
+        foreheadBox.x - 30, 
+        foreheadBox.y - 40, 
+        foreheadBox.width + 60, 
+        foreheadBox.height + 50
+      );
+      canvasCtx.shadowBlur = 0;
+      canvasCtx.setLineDash([]); // Reset do ciągłej linii
 
       // Rysuj prostokąty
+
+      // Lewe oko - niebieski z odwróconymi kolorami
+      canvasCtx.save();
       
-      // Lewe oko - niebieski
+      // Narysuj prostokąt
       canvasCtx.strokeStyle = '#00ffff';
       canvasCtx.lineWidth = 3;
       canvasCtx.strokeRect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
-      canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.2)';
-      canvasCtx.fillRect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
+      
+      // Ustaw obszar przycinania dla lewego oka
+      canvasCtx.beginPath();
+      canvasCtx.rect(leftEyeBox.x, leftEyeBox.y, leftEyeBox.width, leftEyeBox.height);
+      canvasCtx.clip();
+      
+      // Narysuj obraz z odwróconymi kolorami
+      canvasCtx.globalCompositeOperation = 'source-atop';
+      canvasCtx.filter = 'invert(1)';
+      canvasCtx.drawImage(
+        videoElement, 
+        0, 0, canvasElement.width, canvasElement.height
+      );
+      
+      canvasCtx.restore();
+      
       canvasCtx.fillStyle = '#00ffff';
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Lewe oko', leftEyeBox.x, leftEyeBox.y - 5);
