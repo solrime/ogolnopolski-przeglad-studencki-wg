@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie szkieletu twarzy</title>
+  <title>Wykrywanie twarzy - Debug</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
   <style>
     body {
       margin: 0;
@@ -27,7 +27,7 @@
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* Odbicie lustrzane */
+      transform: scaleX(-1);
     }
     #canvas {
       position: absolute;
@@ -49,191 +49,144 @@
       font-size: 16px;
       font-weight: bold;
     }
+    #debug {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 15px;
+      border-radius: 5px;
+      z-index: 100;
+      font-size: 12px;
+      max-width: 300px;
+    }
   </style>
 </head>
 <body>
   <div id="container">
-    <video id="inputVideo" autoplay playsinline></video>
+    <video id="inputVideo" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
-    <div id="status">Wyszukiwanie twarzy...</div>
+    <div id="status">Ładowanie...</div>
+    <div id="debug"></div>
   </div>
 
   <script>
     const videoElement = document.getElementById('inputVideo');
     const canvasElement = document.getElementById('canvas');
-    const canvasCtx = canvasElement.getContext('2d');
     const statusElement = document.getElementById('status');
+    const debugElement = document.getElementById('debug');
 
-    // Dopasowanie rozmiaru canvas do okna
+    let detectionCount = 0;
+
     function resizeCanvas() {
       canvasElement.width = window.innerWidth;
       canvasElement.height = window.innerHeight;
-    }
-
-    function drawFaceLandmarks(landmarks) {
-      if (!landmarks) return;
-      
-      // Rysowanie konturu twarzy (punkty 0-16)
-      canvasCtx.strokeStyle = '#00ff00';
-      canvasCtx.lineWidth = 2;
-      canvasCtx.beginPath();
-      for (let i = 0; i <= 16; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 0) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.stroke();
-
-      // Rysowanie brwi (lewa: 17-21, prawa: 22-26)
-      canvasCtx.strokeStyle = '#ffff00';
-      canvasCtx.beginPath();
-      for (let i = 17; i <= 21; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 17) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.stroke();
-
-      canvasCtx.beginPath();
-      for (let i = 22; i <= 26; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 22) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.stroke();
-
-      // Rysowanie nosa (27-35)
-      canvasCtx.strokeStyle = '#ff00ff';
-      canvasCtx.beginPath();
-      for (let i = 27; i <= 35; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 27) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.stroke();
-
-      // Rysowanie oczu (lewe: 36-41, prawe: 42-47)
-      canvasCtx.strokeStyle = '#00ffff';
-      canvasCtx.beginPath();
-      for (let i = 36; i <= 41; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 36) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.closePath();
-      canvasCtx.stroke();
-
-      canvasCtx.beginPath();
-      for (let i = 42; i <= 47; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 42) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.closePath();
-      canvasCtx.stroke();
-
-      // Rysowanie ust (zewnętrzne: 48-59, wewnętrzne: 60-67)
-      canvasCtx.strokeStyle = '#ff0000';
-      canvasCtx.beginPath();
-      for (let i = 48; i <= 59; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 48) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.closePath();
-      canvasCtx.stroke();
-
-      canvasCtx.strokeStyle = '#ff6666';
-      canvasCtx.beginPath();
-      for (let i = 60; i <= 67; i++) {
-        const x = landmarks[i].x * canvasElement.width;
-        const y = landmarks[i].y * canvasElement.height;
-        if (i === 60) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.closePath();
-      canvasCtx.stroke();
+      debugElement.innerHTML += `Canvas: ${canvasElement.width}x${canvasElement.height}<br>`;
     }
 
     function onResults(results) {
-      // Czyszczenie canvas
+      const canvasCtx = canvasElement.getContext('2d');
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
       
-      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        statusElement.textContent = `Wykryto ${results.multiFaceLandmarks.length} twarz(e)`;
+      detectionCount++;
+      debugElement.innerHTML = `Detections: ${detectionCount}<br>`;
+      
+      if (results.detections && results.detections.length > 0) {
+        statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
+        debugElement.innerHTML += `Found ${results.detections.length} face(s)<br>`;
         
-        // Rysowanie szkieletu dla każdej twarzy
-        results.multiFaceLandmarks.forEach(landmarks => {
-          drawFaceLandmarks(landmarks);
-        });
+        for (let i = 0; i < results.detections.length; i++) {
+          const detection = results.detections[i];
+          const boundingBox = detection.boundingBox;
+          
+          const x = boundingBox.xMin * canvasElement.width;
+          const y = boundingBox.yMin * canvasElement.height;
+          const width = boundingBox.width * canvasElement.width;
+          const height = boundingBox.height * canvasElement.height;
+          
+          debugElement.innerHTML += `Face ${i}: ${x.toFixed(0)},${y.toFixed(0)} ${width.toFixed(0)}x${height.toFixed(0)}<br>`;
+          
+          // Duży, wyraźny prostokąt
+          canvasCtx.strokeStyle = '#00ff00';
+          canvasCtx.lineWidth = 4;
+          canvasCtx.strokeRect(x, y, width, height);
+          
+          canvasCtx.fillStyle = '#00ff00';
+          canvasCtx.font = 'bold 20px Arial';
+          canvasCtx.fillText(`FACE ${i+1}`, x + 10, y - 15);
+          
+          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.2)';
+          canvasCtx.fillRect(x, y, width, height);
+        }
       } else {
         statusElement.textContent = "Wyszukiwanie twarzy...";
+        debugElement.innerHTML += "No faces detected<br>";
+        
+        // Testowy prostokąt w rogu
+        const canvasCtx = canvasElement.getContext('2d');
+        canvasCtx.strokeStyle = 'red';
+        canvasCtx.lineWidth = 2;
+        canvasCtx.strokeRect(10, 10, 100, 100);
+        canvasCtx.fillStyle = 'red';
+        canvasCtx.font = '12px Arial';
+        canvasCtx.fillText('TEST BOX', 15, 25);
+      }
+      
+      // Ogranicz liczbę linii debug
+      if (detectionCount > 50) {
+        detectionCount = 0;
+        debugElement.innerHTML = 'Cleared debug<br>';
       }
     }
 
-    const faceMesh = new FaceMesh({
+    const faceDetection = new FaceDetection({
       locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-      },
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+      }
     });
 
-    faceMesh.setOptions({
-      maxNumFaces: 2,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5,
+    faceDetection.setOptions({
+      model: 'short',
+      minDetectionConfidence: 0.3  // Niższy próg dla lepszego wykrywania
     });
 
-    faceMesh.onResults(onResults);
+    faceDetection.onResults(onResults);
 
-    const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await faceMesh.send({ image: videoElement });
-      },
-      width: 640,
-      height: 480,
+    async function initCamera() {
+      try {
+        statusElement.textContent = "Uruchamianie kamery...";
+        
+        // Sprawdź czy kamera jest dostępna
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 640, height: 480 } 
+        });
+        videoElement.srcObject = stream;
+        
+        const camera = new Camera(videoElement, {
+          onFrame: async () => {
+            await faceDetection.send({ image: videoElement });
+          },
+          width: 640,
+          height: 480
+        });
+
+        await camera.start();
+        statusElement.textContent = "Kamera aktywna!";
+        
+      } catch (error) {
+        console.error('Błąd kamery:', error);
+        statusElement.textContent = "Błąd: " + error.message;
+        debugElement.innerHTML = "Camera error: " + error.message;
+      }
+    }
+
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      initCamera();
     });
 
-    // Inicjalizacja
-    resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
-    
-    // Start kamery
-    camera.start().catch(error => {
-      console.error('Błąd kamery:', error);
-      statusElement.textContent = "Błąd kamery: " + error.message;
-    });
   </script>
 </body>
 </html>
