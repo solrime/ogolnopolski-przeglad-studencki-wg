@@ -98,7 +98,7 @@
         maxDistance = Math.max(maxDistance, distance);
       });
 
-      return maxDistance * 1.5; // Zwiększony promień dla lepszej widoczności
+      return maxDistance * 1.8; // Zwiększony promień dla lepszej widoczności
     }
 
     function drawFaceElements(landmarks) {
@@ -118,13 +118,14 @@
       const leftEyeCenter = getEyeCenter(landmarks, leftEyeIndices);
       const leftEyeRadius = getEyeRadius(landmarks, leftEyeIndices);
 
-      // Rysuj biały okrąg wokół lewego oka (PIERWSZY - pod spodem)
-      canvasCtx.fillStyle = '#ffffff';
+      // Rysuj PUSTY biały okrąg wokół lewego oka (TYLKO KONTUR)
+      canvasCtx.strokeStyle = '#ffffff';
+      canvasCtx.lineWidth = 3;
       canvasCtx.beginPath();
       canvasCtx.arc(leftEyeCenter.x, leftEyeCenter.y, leftEyeRadius, 0, Math.PI * 2);
-      canvasCtx.fill();
+      canvasCtx.stroke();
 
-      // Rysuj białe wypełnienie lewego oka (DRUGI - na wierzchu)
+      // Rysuj białe wypełnienie lewego oka
       canvasCtx.fillStyle = '#ffffff';
       canvasCtx.beginPath();
       for (let i = 0; i < leftEyeIndices.length; i++) {
@@ -157,13 +158,6 @@
         }
       }
       canvasCtx.closePath();
-      canvasCtx.stroke();
-
-      // Rysuj kontur białego okręgu
-      canvasCtx.strokeStyle = '#ffffff';
-      canvasCtx.lineWidth = 3;
-      canvasCtx.beginPath();
-      canvasCtx.arc(leftEyeCenter.x, leftEyeCenter.y, leftEyeRadius, 0, Math.PI * 2);
       canvasCtx.stroke();
 
       // Rysuj białe wypełnienie prawej brwi
