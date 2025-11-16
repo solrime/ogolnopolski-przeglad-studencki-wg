@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Wykrywanie twarzy - poprawiony kontur oka</title>
+  <title>Wykrywanie twarzy - negatyw na lewym oku</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -86,7 +86,7 @@
       });
 
       // Dodajemy margines wokół oka
-      const margin = 5;
+      const margin = 8;
       return {
         x: minX - margin,
         y: minY - margin,
@@ -98,27 +98,24 @@
     function drawInvertedEyeShape(video, landmarks, eyeIndices) {
       const bbox = getEyeBoundingBox(landmarks, eyeIndices);
       
-      // Tworzymy tymczasowy canvas
+      // Tworzymy tymczasowy canvas dla obszaru oka
       const tempCanvas = document.createElement('canvas');
       const tempCtx = tempCanvas.getContext('2d');
       tempCanvas.width = bbox.width;
       tempCanvas.height = bbox.height;
       
-      // Rysujemy obszar oka z wideo na tymczasowy canvas (bez transformacji!)
-      tempCtx.save();
-      tempCtx.scale(-1, 1); // Odwracamy poziomo dla tymczasowego canvas
+      // Rysujemy NORMALNY obszar oka z wideo na tymczasowy canvas
       tempCtx.drawImage(
         video,
-        canvasElement.width - bbox.x - bbox.width, bbox.y, bbox.width, bbox.height,
+        bbox.x, bbox.y, bbox.width, bbox.height,
         0, 0, bbox.width, bbox.height
       );
-      tempCtx.restore();
       
       // Pobieramy dane obrazu
       const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
       const data = imageData.data;
       
-      // Odwracamy kolory (negatyw)
+      // Odwracamy kolory TYLKO w obszarze oka (negatyw)
       for (let i = 0; i < data.length; i += 4) {
         data[i] = 255 - data[i];     // R
         data[i + 1] = 255 - data[i + 1]; // G
@@ -128,7 +125,7 @@
       // Wstawiamy zmodyfikowany obraz z powrotem
       tempCtx.putImageData(imageData, 0, 0);
       
-      // Rysujemy na głównym canvas z odpowiednim przycięciem
+      // Rysujemy na głównym canvas z przycięciem do kształtu oka
       canvasCtx.save();
       
       // Tworzymy ścieżkę przycięcia w kształcie oka
@@ -147,8 +144,8 @@
       canvasCtx.closePath();
       canvasCtx.clip();
       
-      // Rysujemy odwrócony obraz w przyciętym obszarze
-      canvasCtx.drawImage(tempCanvas, bbox.x, bbox.y, bbox.width, bbox.height);
+      // Rysujemy ODWRÓCONY obraz tylko w przyciętym obszarze
+      canvasCtx.drawImage(tempCanvas, bbox.x, bbox.y);
       
       canvasCtx.restore();
     }
@@ -162,7 +159,10 @@
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 
-      // Rysuj odwrócone kolory dla lewego oka (dokładny kształt)
+      // Najpierw rysujemy NORMALNY obraz z kamery
+      canvasCtx.drawImage(video, 0, 0, canvasElement.width, canvasElement.height);
+      
+      // Potem nakładamy negatyw TYLKO na lewe oko
       drawInvertedEyeShape(video, landmarks, leftEyeIndices);
       
       // Rysuj kontur lewego oka
@@ -189,7 +189,7 @@
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Lewe oko (negatyw)', leftEyeBbox.x, leftEyeBbox.y - 10);
 
-      // Rysuj kontur prawego oka
+      // Rysuj kontur prawego oka (normalne kolory)
       canvasCtx.strokeStyle = '#00ff00';
       canvasCtx.lineWidth = 3;
       canvasCtx.beginPath();
