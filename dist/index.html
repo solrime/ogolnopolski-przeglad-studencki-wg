@@ -1,109 +1,155 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web AR - Rozpoznawanie Twarzy</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            z-index: 1000;
-            font-family: Arial, sans-serif;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wykrywanie twarzy</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      background: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+    #container {
+      position: relative;
+      width: 100%;
+      max-width: 1280px;
+      height: 100%;
+      max-height: 720px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    #inputVideo {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Odbicie lustrzane */
+    }
+    #canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+    }
+    #status {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      color: white;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 15px;
+      border-radius: 5px;
+      z-index: 100;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .face-box {
+      position: absolute;
+      border: 3px solid #00ff00;
+      background: rgba(0, 255, 0, 0.1);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+      z-index: 20;
+      pointer-events: none;
+    }
+    .face-label {
+      position: absolute;
+      color: white;
+      background: rgba(0, 255, 0, 0.7);
+      padding: 2px 8px;
+      font-size: 14px;
+      font-weight: bold;
+      z-index: 30;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-    <div id="info">
-        <p>Skieruj kamerę na twarz</p>
-        <p id="status">Ładowanie...</p>
-    </div>
+  <div id="container">
+    <video id="inputVideo" autoplay playsinline></video>
+    <canvas id="canvas" width="1280" height="720"></canvas>
+    <div id="status">Wyszukiwanie twarzy...</div>
+  </div>
 
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        renderer="logarithmicDepthBuffer: true;"
-        vr-mode-ui="enabled: false">
-        
-        <!-- Marker dla twarzy -->
-        <a-marker type="face" smooth="true" smoothCount="10" smoothTolerance="0.01">
-            <a-entity 
-                geometry="primitive: box; width: 0.3; height: 0.3; depth: 0.1"
-                material="color: #00FF00; opacity: 0.8"
-                position="0 0 0.1">
-            </a-entity>
-            
-            <!-- Tekst nad głową -->
-            <a-entity 
-                text="value: Witaj!; align: center; color: white; width: 2"
-                position="0 0.5 0"
-                scale="2 2 2">
-            </a-entity>
-            
-            <!-- Okulary AR -->
-            <a-entity 
-                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
-                material="color: #FF0000"
-                position="-0.08 0.1 0.05">
-            </a-entity>
-            <a-entity 
-                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
-                material="color: #FF0000"
-                position="0.08 0.1 0.05">
-            </a-entity>
-        </a-marker>
-        
-        <a-entity camera></a-entity>
-    </a-scene>
+  <script>
+    const videoElement = document.getElementById('inputVideo');
+    const canvasElement = document.getElementById('canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const statusElement = document.getElementById('status');
 
-    <script>
-        // Informacje o statusie
-        const statusElement = document.getElementById('status');
+    function onResults(results) {
+      // Czyszczenie canvas
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+      
+      // Usuwanie poprzednich prostokątów
+      const existingBoxes = document.querySelectorAll('.face-box, .face-label');
+      existingBoxes.forEach(box => box.remove());
+
+      if (results.detections && results.detections.length > 0) {
+        statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
         
-        // Sprawdzenie wsparcia dla getUserMedia
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            statusElement.textContent = 'Kamera dostępna - szukam twarzy...';
-        } else {
-            statusElement.textContent = 'Błąd: Kamera niedostępna';
+        for (let i = 0; i < results.detections.length; i++) {
+          const detection = results.detections[i];
+          const boundingBox = detection.boundingBox;
+          
+          // Konwersja współrzędnych z MediaPipe na piksele
+          const x = boundingBox.xMin * canvasElement.width;
+          const y = boundingBox.yMin * canvasElement.height;
+          const width = boundingBox.width * canvasElement.width;
+          const height = boundingBox.height * canvasElement.height;
+          
+          // Rysowanie prostokąta na canvas
+          canvasCtx.strokeStyle = '#00ff00';
+          canvasCtx.lineWidth = 3;
+          canvasCtx.strokeRect(x, y, width, height);
+          
+          // Dodanie etykiety
+          canvasCtx.fillStyle = '#00ff00';
+          canvasCtx.font = '16px Arial';
+          canvasCtx.fillText(`Twarz ${i+1}`, x, y - 10);
+          
+          // Dodanie przezroczystego wypełnienia
+          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+          canvasCtx.fillRect(x, y, width, height);
         }
+      } else {
+        statusElement.textContent = "Wyszukiwanie twarzy...";
+      }
+    }
 
-        // Event listener dla wykrycia twarzy
-        document.querySelector('a-marker').addEventListener('markerFound', () => {
-            statusElement.textContent = 'Twarz wykryta! 🎉';
-            statusElement.style.color = '#00FF00';
-        });
+    const faceDetection = new FaceDetection({
+      locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`;
+      },
+    });
 
-        document.querySelector('a-marker').addEventListener('markerLost', () => {
-            statusElement.textContent = 'Szukam twarzy...';
-            statusElement.style.color = 'white';
-        });
+    faceDetection.setOptions({
+      model: 'short', // 'short' jest szybszy
+      minDetectionConfidence: 0.5,
+    });
 
-        // Obsługa błędów
-        document.querySelector('a-scene').addEventListener('arjs-video-loaded', () => {
-            console.log('Wideo załadowane');
-        });
+    faceDetection.onResults(onResults);
 
-        document.querySelector('a-scene').addEventListener('error', (e) => {
-            console.error('Błąd AR:', e.detail);
-            statusElement.textContent = 'Błąd: ' + e.detail;
-            statusElement.style.color = '#FF0000';
-        });
-    </script>
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await faceDetection.send({ image: videoElement });
+      },
+      width: 1280,
+      height: 720,
+    });
+
+    camera.start();
+  </script>
 </body>
 </html>
