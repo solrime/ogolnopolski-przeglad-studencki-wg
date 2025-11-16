@@ -1,109 +1,201 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web AR - Rozpoznawanie Twarzy</title>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
-    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <title>Rozpoznawanie Twarzy</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
         }
-        #info {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
+        .container {
+            margin: 20px 0;
+        }
+        video, canvas {
+            width: 100%;
+            max-width: 640px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
             color: white;
+            padding: 10px 20px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 10px 2px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+        #status {
+            margin: 10px 0;
             padding: 10px;
             border-radius: 5px;
-            z-index: 1000;
-            font-family: Arial, sans-serif;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
         }
     </style>
 </head>
 <body>
-    <div id="info">
-        <p>Skieruj kamerę na twarz</p>
-        <p id="status">Ładowanie...</p>
+    <h1>Rozpoznawanie Twarzy</h1>
+    
+    <div class="container">
+        <video id="video" width="640" height="480" autoplay muted></video>
+        <canvas id="canvas"></canvas>
     </div>
-
-    <a-scene 
-        embedded 
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        renderer="logarithmicDepthBuffer: true;"
-        vr-mode-ui="enabled: false">
-        
-        <!-- Marker dla twarzy -->
-        <a-marker type="face" smooth="true" smoothCount="10" smoothTolerance="0.01">
-            <a-entity 
-                geometry="primitive: box; width: 0.3; height: 0.3; depth: 0.1"
-                material="color: #00FF00; opacity: 0.8"
-                position="0 0 0.1">
-            </a-entity>
-            
-            <!-- Tekst nad głową -->
-            <a-entity 
-                text="value: Witaj!; align: center; color: white; width: 2"
-                position="0 0.5 0"
-                scale="2 2 2">
-            </a-entity>
-            
-            <!-- Okulary AR -->
-            <a-entity 
-                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
-                material="color: #FF0000"
-                position="-0.08 0.1 0.05">
-            </a-entity>
-            <a-entity 
-                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
-                material="color: #FF0000"
-                position="0.08 0.1 0.05">
-            </a-entity>
-        </a-marker>
-        
-        <a-entity camera></a-entity>
-    </a-scene>
-
+    
+    <div class="container">
+        <button id="startBtn">Uruchom kamerę</button>
+        <button id="detectBtn" disabled>Rozpocznij rozpoznawanie</button>
+        <button id="stopBtn" disabled>Zatrzymaj</button>
+    </div>
+    
+    <div id="status" class="loading">Ładowanie modeli rozpoznawania twarzy...</div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@0.0.1/dist/face-landmarks-detection.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    
     <script>
-        // Informacje o statusie
-        const statusElement = document.getElementById('status');
+        // Elementy DOM
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const startBtn = document.getElementById('startBtn');
+        const detectBtn = document.getElementById('detectBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
         
-        // Sprawdzenie wsparcia dla getUserMedia
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            statusElement.textContent = 'Kamera dostępna - szukam twarzy...';
-        } else {
-            statusElement.textContent = 'Błąd: Kamera niedostępna';
+        let stream = null;
+        let detectionInterval = null;
+        
+        // Inicjalizacja modeli rozpoznawania twarzy
+        async function loadModels() {
+            try {
+                status.textContent = 'Ładowanie modeli rozpoznawania twarzy...';
+                status.className = 'status loading';
+                
+                // Ładowanie modeli z face-api.js
+                await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+                await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+                await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+                await faceapi.nets.faceExpressionNet.loadFromUri('/models');
+                
+                status.textContent = 'Modele załadowane pomyślnie!';
+                status.className = 'status success';
+                startBtn.disabled = false;
+            } catch (error) {
+                console.error('Błąd podczas ładowania modeli:', error);
+                status.textContent = 'Błąd podczas ładowania modeli: ' + error.message;
+                status.className = 'status error';
+            }
         }
-
-        // Event listener dla wykrycia twarzy
-        document.querySelector('a-marker').addEventListener('markerFound', () => {
-            statusElement.textContent = 'Twarz wykryta! 🎉';
-            statusElement.style.color = '#00FF00';
-        });
-
-        document.querySelector('a-marker').addEventListener('markerLost', () => {
-            statusElement.textContent = 'Szukam twarzy...';
-            statusElement.style.color = 'white';
-        });
-
-        // Obsługa błędów
-        document.querySelector('a-scene').addEventListener('arjs-video-loaded', () => {
-            console.log('Wideo załadowane');
-        });
-
-        document.querySelector('a-scene').addEventListener('error', (e) => {
-            console.error('Błąd AR:', e.detail);
-            statusElement.textContent = 'Błąd: ' + e.detail;
-            statusElement.style.color = '#FF0000';
-        });
+        
+        // Uruchomienie kamery
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                
+                startBtn.disabled = true;
+                detectBtn.disabled = false;
+                stopBtn.disabled = false;
+                
+                status.textContent = 'Kamera uruchomiona pomyślnie!';
+                status.className = 'status success';
+            } catch (error) {
+                console.error('Błąd podczas uruchamiania kamery:', error);
+                status.textContent = 'Błąd podczas uruchamiania kamery: ' + error.message;
+                status.className = 'status error';
+            }
+        }
+        
+        // Rozpoczęcie rozpoznawania twarzy
+        function startDetection() {
+            detectBtn.disabled = true;
+            stopBtn.disabled = false;
+            
+            status.textContent = 'Rozpoczęto rozpoznawanie twarzy...';
+            status.className = 'status success';
+            
+            // Ustawienie rozmiaru canvas na rozmiar wideo
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Rozpoczęcie detekcji co 100ms
+            detectionInterval = setInterval(async () => {
+                const detections = await faceapi
+                    .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceExpressions();
+                
+                // Czyszczenie canvas
+                const context = canvas.getContext('2d');
+                context.clearRect(0, 0, canvas.width, canvas.height);
+                
+                // Rysowanie detekcji na canvas
+                faceapi.draw.drawDetections(canvas, detections);
+                faceapi.draw.drawFaceLandmarks(canvas, detections);
+                faceapi.draw.drawFaceExpressions(canvas, detections);
+                
+                // Wyświetlanie liczby wykrytych twarzy
+                if (detections.length > 0) {
+                    status.textContent = `Wykryto ${detections.length} twarz(y)`;
+                } else {
+                    status.textContent = 'Nie wykryto twarzy';
+                }
+            }, 100);
+        }
+        
+        // Zatrzymanie rozpoznawania i kamery
+        function stopDetection() {
+            if (detectionInterval) {
+                clearInterval(detectionInterval);
+                detectionInterval = null;
+            }
+            
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            // Czyszczenie canvas
+            const context = canvas.getContext('2d');
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            
+            startBtn.disabled = false;
+            detectBtn.disabled = true;
+            stopBtn.disabled = true;
+            
+            status.textContent = 'Rozpoznawanie zatrzymane';
+            status.className = 'status';
+        }
+        
+        // Przypisanie zdarzeń do przycisków
+        startBtn.addEventListener('click', startCamera);
+        detectBtn.addEventListener('click', startDetection);
+        stopBtn.addEventListener('click', stopDetection);
+        
+        // Rozpoczęcie ładowania modeli po załadowaniu strony
+        window.addEventListener('DOMContentLoaded', loadModels);
     </script>
 </body>
 </html>
