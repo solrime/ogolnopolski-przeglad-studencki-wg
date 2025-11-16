@@ -80,8 +80,7 @@
       const rightEyeIndices = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398];
       
       // Definicje punktów dla brwi
-      const leftEyebrowIndices = [46, 53, 52, 65, 55, 70, 63, 105, 66, 107, 336, 296, 334, 293, 300, 276, 283, 282, 295, 285];
-      const rightEyebrowIndices = [276, 283, 282, 295, 285, 300, 293, 334, 296, 336, 107, 66, 105, 63, 70, 55, 65, 52, 53, 46];
+      const rightEyebrowIndices = [300, 293, 334, 296, 336]; // Prawa brew
       
       const noseIndices = [1, 2, 98, 327, 326, 2, 97, 98, 129, 209, 49, 131, 134, 51, 5, 281, 248, 456, 419, 351, 417, 168, 188, 122, 196, 3, 51, 4, 5, 195, 197, 6, 419];
       const mouthOuterIndices = [61, 146, 91, 181, 84, 17, 314, 405, 320, 307, 324, 318, 402, 317, 14, 87, 178, 88, 95];
@@ -121,26 +120,8 @@
       canvasCtx.closePath();
       canvasCtx.stroke();
 
-      // Rysuj obrys lewej brwi
-      canvasCtx.strokeStyle = '#ff00ff';
-      canvasCtx.lineWidth = 4;
-      canvasCtx.beginPath();
-      for (let i = 0; i < leftEyebrowIndices.length; i++) {
-        const index = leftEyebrowIndices[i];
-        const x = landmarks[index].x * canvasElement.width;
-        const y = landmarks[index].y * canvasElement.height;
-        
-        if (i === 0) {
-          canvasCtx.moveTo(x, y);
-        } else {
-          canvasCtx.lineTo(x, y);
-        }
-      }
-      canvasCtx.stroke();
-      
-      // Rysuj obrys prawej brwi
-      canvasCtx.strokeStyle = '#ff00ff';
-      canvasCtx.lineWidth = 4;
+      // Rysuj białe wypełnienie prawej brwi
+      canvasCtx.fillStyle = '#ffffff';
       canvasCtx.beginPath();
       for (let i = 0; i < rightEyebrowIndices.length; i++) {
         const index = rightEyebrowIndices[i];
@@ -153,14 +134,33 @@
           canvasCtx.lineTo(x, y);
         }
       }
+      canvasCtx.closePath();
+      canvasCtx.fill();
+      
+      // Rysuj kontur prawej brwi
+      canvasCtx.strokeStyle = '#ff00ff';
+      canvasCtx.lineWidth = 3;
+      canvasCtx.beginPath();
+      for (let i = 0; i < rightEyebrowIndices.length; i++) {
+        const index = rightEyebrowIndices[i];
+        const x = landmarks[index].x * canvasElement.width;
+        const y = landmarks[index].y * canvasElement.height;
+        
+        if (i === 0) {
+          canvasCtx.moveTo(x, y);
+        } else {
+          canvasCtx.lineTo(x, y);
+        }
+      }
+      canvasCtx.closePath();
       canvasCtx.stroke();
       
-      // Etykieta dla lewego oka
-      function getEyeBoundingBox(landmarks, eyeIndices) {
+      // Etykiety
+      function getBoundingBox(landmarks, indices) {
         let minX = Infinity, minY = Infinity;
         let maxX = -Infinity, maxY = -Infinity;
 
-        eyeIndices.forEach(index => {
+        indices.forEach(index => {
           const x = landmarks[index].x * canvasElement.width;
           const y = landmarks[index].y * canvasElement.height;
           minX = Math.min(minX, x);
@@ -177,10 +177,15 @@
         };
       }
 
-      const leftEyeBbox = getEyeBoundingBox(landmarks, leftEyeIndices);
+      const leftEyeBbox = getBoundingBox(landmarks, leftEyeIndices);
       canvasCtx.fillStyle = '#00ffff';
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Lewe oko (białe)', leftEyeBbox.x, leftEyeBbox.y - 10);
+
+      const rightEyebrowBbox = getBoundingBox(landmarks, rightEyebrowIndices);
+      canvasCtx.fillStyle = '#ff00ff';
+      canvasCtx.font = '14px Arial';
+      canvasCtx.fillText('Prawa brew (biała)', rightEyebrowBbox.x, rightEyebrowBbox.y - 10);
 
       // Rysuj kontur prawego oka
       canvasCtx.strokeStyle = '#00ff00';
@@ -218,33 +223,12 @@
       canvasCtx.fill();
       
       // Etykieta dla prawego oka
-      const rightEyeBbox = getEyeBoundingBox(landmarks, rightEyeIndices);
+      const rightEyeBbox = getBoundingBox(landmarks, rightEyeIndices);
       canvasCtx.fillStyle = '#00ff00';
       canvasCtx.font = '14px Arial';
       canvasCtx.fillText('Prawe oko', rightEyeBbox.x, rightEyeBbox.y - 10);
 
       // Pobierz bounding boxy dla nosa i ust
-      function getBoundingBox(landmarks, indices) {
-        let minX = Infinity, minY = Infinity;
-        let maxX = -Infinity, maxY = -Infinity;
-
-        indices.forEach(index => {
-          const x = landmarks[index].x * canvasElement.width;
-          const y = landmarks[index].y * canvasElement.height;
-          minX = Math.min(minX, x);
-          minY = Math.min(minY, y);
-          maxX = Math.max(maxX, x);
-          maxY = Math.max(maxY, y);
-        });
-
-        return {
-          x: minX,
-          y: minY,
-          width: maxX - minX,
-          height: maxY - minY
-        };
-      }
-
       const noseBox = getBoundingBox(landmarks, noseIndices);
       const mouthBox = getBoundingBox(landmarks, mouthOuterIndices);
 
