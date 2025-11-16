@@ -1,241 +1,91 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Filtr AR na Twarz</title>
+    <title>Web AR Filtr na Twarz</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
+</head>
+<body style="margin: 0; overflow: hidden;">
+    <a-scene
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; debugUIEnabled: false;"
+        renderer="logarithmicDepthBuffer: true;"
+        embedded
+        ar-face-tracking
+    >
+        <!-- Kamera AR -->
+        <a-entity camera></a-entity>
+        
+        <!-- Filtr - okulary -->
+        <a-entity id="face" face=""></a-entity>
+        
+        <!-- Filtr 1: Okulary przeciwsłoneczne -->
+        <a-entity
+            geometry="primitive: plane; width: 0.3; height: 0.1"
+            material="color: #000000; opacity: 0.8"
+            position="0 0.15 -0.3"
+            face-face="face: #face;"
+        >
+            <!-- Soczewki okularów -->
+            <a-entity
+                geometry="primitive: cylinder; radius: 0.06; height: 0.01"
+                material="color: #1a5276; opacity: 0.6"
+                position="-0.08 0 0.01"
+            ></a-entity>
+            <a-entity
+                geometry="primitive: cylinder; radius: 0.06; height: 0.01"
+                material="color: #1a5276; opacity: 0.6"
+                position="0.08 0 0.01"
+            ></a-entity>
+        </a-entity>
+
+        <!-- Filtr 2: Wąsy -->
+        <a-entity
+            geometry="primitive: box; width: 0.2; height: 0.02; depth: 0.01"
+            material="color: #000000"
+            position="0 -0.05 -0.2"
+            face-face="face: #face;"
+        ></a-entity>
+
+        <!-- Filtr 3: Korona/tiara -->
+        <a-entity
+            geometry="primitive: cone; radiusBottom: 0.15; radiusTop: 0.1; height: 0.05"
+            material="color: #FFD700"
+            position="0 0.25 -0.1"
+            rotation="0 0 0"
+            face-face="face: #face;"
+        ></a-entity>
+
+    </a-scene>
+
     <style>
         body {
             margin: 0;
             padding: 0;
             background: #000;
-            overflow: hidden;
         }
-        #video {
+        
+        /* Informacja dla użytkownika */
+        .instruction {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            transform: scaleX(-1);
-        }
-        #canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #loading {
-            position: absolute;
-            top: 50%;
+            top: 20px;
             left: 50%;
-            transform: translate(-50%, -50%);
+            transform: translateX(-50%);
             color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px 20px;
+            border-radius: 20px;
             font-family: Arial, sans-serif;
-            font-size: 18px;
+            text-align: center;
+            z-index: 1000;
         }
     </style>
-</head>
-<body>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-    <div id="loading">Ładowanie modelu...</div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@latest"></script>
-
-    <script>
-        let model;
-        let video;
-        let canvas;
-        let ctx;
-        let isModelLoaded = false;
-
-        // Inicjalizacja
-        async function init() {
-            video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-            ctx = canvas.getContext('2d');
-            
-            // Ustawienie rozmiaru canvas
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            // Ładowanie modelu
-            try {
-                model = await faceLandmarksDetection.load(
-                    faceLandmarksDetection.SupportedPackages.mediapipeFacemesh,
-                    { maxFaces: 1 }
-                );
-                isModelLoaded = true;
-                document.getElementById('loading').style.display = 'none';
-                console.log('Model załadowany!');
-            } catch (error) {
-                console.error('Błąd ładowania modelu:', error);
-                return;
-            }
-            
-            // Inicjalizacja kamery
-            await setupCamera();
-            
-            // Rozpoczęcie detekcji
-            detectFaces();
-        }
-
-        // Konfiguracja kamery
-        async function setupCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { 
-                        width: { ideal: 640 },
-                        height: { ideal: 480 },
-                        facingMode: 'user'
-                    }
-                });
-                video.srcObject = stream;
-                
-                return new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        resolve();
-                    };
-                });
-            } catch (error) {
-                console.error('Błąd kamery:', error);
-                alert('Nie można uzyskać dostępu do kamery!');
-            }
-        }
-
-        // Główna funkcja detekcji
-        async function detectFaces() {
-            if (!isModelLoaded) return;
-            
-            const predictions = await model.estimateFaces({
-                input: video,
-                returnTensors: false,
-                flipHorizontal: false,
-                predictIrises: true
-            });
-            
-            // Czyszczenie canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Rysowanie wideo
-            ctx.save();
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-            ctx.restore();
-            
-            if (predictions.length > 0) {
-                predictions.forEach(prediction => {
-                    drawFilter(prediction);
-                });
-            }
-            
-            requestAnimationFrame(detectFaces);
-        }
-
-        // Rysowanie filtra
-        function drawFilter(prediction) {
-            const keypoints = prediction.scaledMesh;
-            
-            // Punkty do filtra okularów
-            const leftEye = keypoints[33];  // Lewe oko
-            const rightEye = keypoints[263]; // Prawe oko
-            const nose = keypoints[1];      // Nos
-            
-            if (leftEye && rightEye && nose) {
-                // Obliczanie odległości między oczami
-                const eyeDistance = Math.sqrt(
-                    Math.pow(rightEye[0] - leftEye[0], 2) + 
-                    Math.pow(rightEye[1] - leftEye[1], 2)
-                );
-                
-                const glassesWidth = eyeDistance * 2.2;
-                const glassesHeight = eyeDistance * 0.8;
-                
-                // Rysowanie okularów
-                ctx.save();
-                ctx.scale(-1, 1);
-                
-                // Lewe szkło
-                ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
-                ctx.fillRect(
-                    -leftEye[0] - glassesWidth/2,
-                    leftEye[1] - glassesHeight/2,
-                    glassesWidth,
-                    glassesHeight
-                );
-                
-                // Prawe szkło
-                ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
-                ctx.fillRect(
-                    -rightEye[0] - glassesWidth/2,
-                    rightEye[1] - glassesHeight/2,
-                    glassesWidth,
-                    glassesHeight
-                );
-                
-                // Mostek okularów
-                ctx.fillStyle = 'rgba(255, 100, 100, 0.8)';
-                ctx.fillRect(
-                    -nose[0] - glassesWidth/4,
-                    nose[1] - glassesHeight/8,
-                    glassesWidth/2,
-                    glassesHeight/4
-                );
-                
-                ctx.restore();
-                
-                // Rysowanie korony (dodatkowy filtr)
-                drawCrown(keypoints);
-            }
-        }
-
-        // Rysowanie korony
-        function drawCrown(keypoints) {
-            const forehead = keypoints[10]; // Punkt na czole
-            
-            if (forehead) {
-                ctx.save();
-                ctx.scale(-1, 1);
-                
-                const crownWidth = 100;
-                const crownHeight = 40;
-                
-                // Podstawa korony
-                ctx.fillStyle = 'rgba(255, 215, 0, 0.8)';
-                ctx.fillRect(
-                    -forehead[0] - crownWidth/2,
-                    forehead[1] - crownHeight - 20,
-                    crownWidth,
-                    crownHeight
-                );
-                
-                // Szczyty korony
-                ctx.fillStyle = 'rgba(255, 165, 0, 0.9)';
-                for (let i = 0; i < 5; i++) {
-                    ctx.beginPath();
-                    ctx.moveTo(-forehead[0] - crownWidth/2 + i * crownWidth/4, forehead[1] - crownHeight - 20);
-                    ctx.lineTo(-forehead[0] - crownWidth/2 + (i + 0.5) * crownWidth/4, forehead[1] - crownHeight - 40);
-                    ctx.lineTo(-forehead[0] - crownWidth/2 + (i + 1) * crownWidth/4, forehead[1] - crownHeight - 20);
-                    ctx.closePath();
-                    ctx.fill();
-                }
-                
-                ctx.restore();
-            }
-        }
-
-        // Start aplikacji
-        window.onload = init;
-        
-        // Responsywność
-        window.onresize = () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        };
-    </script>
+    <div class="instruction">
+        🎭 Skieruj kamerę na swoją twarz aby zobaczyć filtry AR!
+    </div>
 </body>
 </html>
