@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Interaktywna siatka 3D sterowana twarzą</title>
+  <title>Wykrywanie twarzy</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
@@ -15,75 +15,63 @@
       font-family: Arial, sans-serif;
       overflow: hidden;
       background: black;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
     }
     #container {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100vw;
-      height: 100vh;
-      perspective: 1000px;
+      position: relative;
+      width: 100%;
+      max-width: 1280px;
+      height: 100%;
+      max-height: 720px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
     }
     #inputVideo {
-      display: none; 
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* Odbicie lustrzane */
     }
     #canvas {
-      display: none; 
-    }
-    .grid {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      pointer-events: none;
       z-index: 10;
-      background: transparent;
-      mix-blend-mode: difference;
-    }
-    .square {
-      position: absolute;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      box-sizing: border-box;
-      transition: all 0.3s ease-out;
-      transform-origin: center;
-      transform-style: preserve-3d;
-      z-index: 20;
-      background: rgba(0, 0, 0, 0.2);
-      mix-blend-mode: difference;
-    }
-    .square.highlight {
-      border-color: rgba(0, 0, 255, 0.8);
-      background: rgba(0, 0, 255, 0.1);
-      z-index: 30;
-      box-shadow: 0 0 15px rgba(255, 0, 0, 0.5);
-      mix-blend-mode: normal;
-    }
-    .corner-square {
-      position: absolute;
-      width: 10px;
-      height: 10px;
-      background: rgba(255, 255, 255, 0.5);
-      transition: all 0.3s ease-out;
-      transform-style: preserve-3d;
-      z-index: 25;
-      mix-blend-mode: difference;
-    }
-    .square.highlight .corner-square {
-      background: rgba(255, 215, 0, 0.8);
-      box-shadow: 0 0 5px rgba(255, 215, 0, 0.8);
-      mix-blend-mode: normal;
     }
     #status {
-      position: fixed;
-      bottom: 20px;
+      position: absolute;
+      top: 20px;
       left: 20px;
       color: white;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 10px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px 15px;
       border-radius: 5px;
       z-index: 100;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    .face-box {
+      position: absolute;
+      border: 3px solid #00ff00;
+      background: rgba(0, 255, 0, 0.1);
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+      z-index: 20;
+      pointer-events: none;
+    }
+    .face-label {
+      position: absolute;
+      color: white;
+      background: rgba(0, 255, 0, 0.7);
+      padding: 2px 8px;
       font-size: 14px;
+      font-weight: bold;
+      z-index: 30;
+      pointer-events: none;
     }
   </style>
 </head>
@@ -91,233 +79,53 @@
   <div id="container">
     <video id="inputVideo" autoplay playsinline></video>
     <canvas id="canvas" width="1280" height="720"></canvas>
-    <div id="grid" class="grid"></div>
+    <div id="status">Wyszukiwanie twarzy...</div>
   </div>
-  <div id="status">Wyszukiwanie twarzy...</div>
 
   <script>
     const videoElement = document.getElementById('inputVideo');
     const canvasElement = document.getElementById('canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const gridElement = document.getElementById('grid');
     const statusElement = document.getElementById('status');
 
-    // Konfiguracja siatki
-    const gridSize = 8;
-    let squares = [];
-    let squareWidth = 0;
-    let squareHeight = 0;
-
-    // Tworzenie narożnych kwadratów
-    function createCornerSquares(parentSquare) {
-      const cornerSize = 10;
-      const positions = [
-        { top: 0, left: 0 },
-        { top: 0, right: 0 },
-        { bottom: 0, left: 0 },
-        { bottom: 0, right: 0 }
-      ];
-
-      positions.forEach(pos => {
-        const cornerSquare = document.createElement('div');
-        cornerSquare.className = 'corner-square';
-        cornerSquare.style.width = `${cornerSize}px`;
-        cornerSquare.style.height = `${cornerSize}px`;
-        
-        if (pos.top !== undefined) cornerSquare.style.top = `${pos.top}px`;
-        if (pos.left !== undefined) cornerSquare.style.left = `${pos.left}px`;
-        if (pos.right !== undefined) cornerSquare.style.right = `${pos.right}px`;
-        if (pos.bottom !== undefined) cornerSquare.style.bottom = `${pos.bottom}px`;
-        
-        parentSquare.appendChild(cornerSquare);
-      });
-    }
-
-    // Tworzenie siatki
-    function createGrid() {
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      squareWidth = width / gridSize;
-      squareHeight = height / gridSize;
-
-      gridElement.innerHTML = '';
-      squares = [];
-
-      for (let row = 0; row < gridSize; row++) {
-        for (let col = 0; col < gridSize; col++) {
-          const square = document.createElement('div');
-          square.className = 'square';
-          square.style.width = `${squareWidth}px`;
-          square.style.height = `${squareHeight}px`;
-          square.style.left = `${col * squareWidth}px`;
-          square.style.top = `${row * squareHeight}px`;
-          square.setAttribute('data-row', row);
-          square.setAttribute('data-col', col);
-
-          createCornerSquares(square);
-
-          gridElement.appendChild(square);
-          squares.push({
-            element: square,
-            row: row,
-            col: col,
-            centerX: (col + 0.5) * squareWidth,
-            centerY: (row + 0.5) * squareHeight,
-            baseSize: 1,
-          });
-        }
-      }
-    }
-
-    function calculateFaceSize(detection) {
-      if (!detection) return 0;
-      
-      const boundingBox = detection.boundingBox;
-      const width = boundingBox.width * canvasElement.width;
-      const height = boundingBox.height * canvasElement.height;
-      
-      return Math.sqrt(width * width + height * height);
-    }
-
-    function updateGrid(facesData) {
-      squares.forEach((square) => {
-        square.element.style.transform = 'scale(1, 1)';
-        square.element.classList.remove('highlight');
-      });
-
-      if (!facesData || facesData.length === 0) {
-        statusElement.textContent = "Wyszukiwanie twarzy...";
-        return;
-      }
-      
-      statusElement.textContent = `Wykryto ${facesData.length} twarz(e)`;
-      
-      // Pierwsza twarz - efekt poziomy
-      if (facesData[0]) {
-        const { position, depthRatio } = facesData[0];
-        const [x, y] = position;
-        const correctedX = window.innerWidth - x;
-
-        const depthEffect = 1 + (1 - depthRatio) * 4;
-
-        squares.forEach((square) => {
-          const dx = square.centerX - correctedX;
-          const dy = square.centerY - y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          const maxDistance = Math.min(
-            window.innerWidth,
-            window.innerHeight
-          ) * 0.5;
-
-          let proximityEffect = 1;
-          if (distance < maxDistance) {
-            proximityEffect =
-              1 + (1 - distance / maxDistance) * 1.2 * (2.5 - depthEffect);
-          }
-
-          const depthScale =
-            1 - (1 - depthRatio) * 0.8 * (1 - distance / maxDistance);
-
-          const currentTransform = square.element.style.transform || 'scale(1, 1)';
-          const currentScaleMatch = currentTransform.match(/scale\(([^,]+),\s*([^)]+)\)/);
-          const currentXScale = currentScaleMatch ? parseFloat(currentScaleMatch[1]) : 1;
-          const currentYScale = currentScaleMatch ? parseFloat(currentScaleMatch[2]) : 1;
-          
-          const totalXScale = Math.min(3, currentXScale * proximityEffect * depthScale);
-          const totalYScale = currentYScale;
-
-          square.element.style.transform = `scale(${Math.max(0.5, totalXScale)}, ${Math.max(0.5, totalYScale)})`;
-
-          const isClosest = distance < squareWidth * 1.2;
-          if (isClosest) {
-            square.element.classList.add('highlight');
-            const highlightXScale = totalXScale * 1.2;
-            square.element.style.transform = `scale(${Math.max(0.5, highlightXScale)}, ${Math.max(0.5, totalYScale)})`;
-          }
-        });
-      }
-      
-      // Druga twarz - efekt pionowy
-      if (facesData[1]) {
-        const { position, depthRatio } = facesData[1];
-        const [x, y] = position;
-        const correctedX = window.innerWidth - x;
-
-        const depthEffect = 1 + (1 - depthRatio) * 4;
-
-        squares.forEach((square) => {
-          const dx = square.centerX - correctedX;
-          const dy = square.centerY - y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          const maxDistance = Math.min(
-            window.innerWidth,
-            window.innerHeight
-          ) * 0.5;
-
-          let proximityEffect = 1;
-          if (distance < maxDistance) {
-            proximityEffect =
-              1 + (1 - distance / maxDistance) * 1.2 * (2.5 - depthEffect);
-          }
-
-          const depthScale =
-            1 - (1 - depthRatio) * 0.8 * (1 - distance / maxDistance);
-
-          const currentTransform = square.element.style.transform || 'scale(1, 1)';
-          const currentScaleMatch = currentTransform.match(/scale\(([^,]+),\s*([^)]+)\)/);
-          const currentXScale = currentScaleMatch ? parseFloat(currentScaleMatch[1]) : 1;
-          const currentYScale = currentScaleMatch ? parseFloat(currentScaleMatch[2]) : 1;
-          
-          const totalXScale = currentXScale;
-          const totalYScale = Math.min(3, currentYScale * proximityEffect * depthScale);
-
-          square.element.style.transform = `scale(${Math.max(0.5, totalXScale)}, ${Math.max(0.5, totalYScale)})`;
-
-          const isClosest = distance < squareWidth * 1.2;
-          if (isClosest) {
-            square.element.classList.add('highlight');
-            const highlightYScale = totalYScale * 1.2;
-            square.element.style.transform = `scale(${Math.max(0.5, totalXScale)}, ${Math.max(0.5, highlightYScale)})`;
-          }
-        });
-      }
-    }
-
     function onResults(results) {
-      canvasCtx.save();
+      // Czyszczenie canvas
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      canvasCtx.restore();
-
-      let facesData = [];
+      
+      // Usuwanie poprzednich prostokątów
+      const existingBoxes = document.querySelectorAll('.face-box, .face-label');
+      existingBoxes.forEach(box => box.remove());
 
       if (results.detections && results.detections.length > 0) {
+        statusElement.textContent = `Wykryto ${results.detections.length} twarz(e)`;
+        
         for (let i = 0; i < results.detections.length; i++) {
           const detection = results.detections[i];
           const boundingBox = detection.boundingBox;
-
-          // Środek twarzy
-          const centerX = (boundingBox.xMin + boundingBox.width / 2) * canvasElement.width;
-          const centerY = (boundingBox.yMin + boundingBox.height / 2) * canvasElement.height;
-
-          const faceSize = calculateFaceSize(detection);
-
-          const minFaceSize = 50;
-          const maxFaceSize = 300;
-          const depthRatio = Math.min(
-            1,
-            Math.max(0, (faceSize - minFaceSize) / (maxFaceSize - minFaceSize))
-          );
-
-          facesData.push({
-            position: [centerX, centerY],
-            depthRatio,
-          });
+          
+          // Konwersja współrzędnych z MediaPipe na piksele
+          const x = boundingBox.xMin * canvasElement.width;
+          const y = boundingBox.yMin * canvasElement.height;
+          const width = boundingBox.width * canvasElement.width;
+          const height = boundingBox.height * canvasElement.height;
+          
+          // Rysowanie prostokąta na canvas
+          canvasCtx.strokeStyle = '#00ff00';
+          canvasCtx.lineWidth = 3;
+          canvasCtx.strokeRect(x, y, width, height);
+          
+          // Dodanie etykiety
+          canvasCtx.fillStyle = '#00ff00';
+          canvasCtx.font = '16px Arial';
+          canvasCtx.fillText(`Twarz ${i+1}`, x, y - 10);
+          
+          // Dodanie przezroczystego wypełnienia
+          canvasCtx.fillStyle = 'rgba(0, 255, 0, 0.1)';
+          canvasCtx.fillRect(x, y, width, height);
         }
+      } else {
+        statusElement.textContent = "Wyszukiwanie twarzy...";
       }
-
-      updateGrid(facesData);
     }
 
     const faceDetection = new FaceDetection({
@@ -327,7 +135,7 @@
     });
 
     faceDetection.setOptions({
-      model: 'short', // 'short' lub 'full' - 'short' jest szybszy
+      model: 'short', // 'short' jest szybszy
       minDetectionConfidence: 0.5,
     });
 
@@ -341,12 +149,7 @@
       height: 720,
     });
 
-    createGrid();
     camera.start();
-
-    window.addEventListener('resize', () => {
-      createGrid();
-    });
   </script>
 </body>
 </html>
