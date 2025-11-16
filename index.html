@@ -3,89 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web AR Filtr na Twarz</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <title>Web AR - Rozpoznawanie Twarzy</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-    <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
-</head>
-<body style="margin: 0; overflow: hidden;">
-    <a-scene
-        vr-mode-ui="enabled: false"
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        renderer="logarithmicDepthBuffer: true;"
-        embedded
-        ar-face-tracking
-    >
-        <!-- Kamera AR -->
-        <a-entity camera></a-entity>
-        
-        <!-- Filtr - okulary -->
-        <a-entity id="face" face=""></a-entity>
-        
-        <!-- Filtr 1: Okulary przeciwsłoneczne -->
-        <a-entity
-            geometry="primitive: plane; width: 0.3; height: 0.1"
-            material="color: #000000; opacity: 0.8"
-            position="0 0.15 -0.3"
-            face-face="face: #face;"
-        >
-            <!-- Soczewki okularów -->
-            <a-entity
-                geometry="primitive: cylinder; radius: 0.06; height: 0.01"
-                material="color: #1a5276; opacity: 0.6"
-                position="-0.08 0 0.01"
-            ></a-entity>
-            <a-entity
-                geometry="primitive: cylinder; radius: 0.06; height: 0.01"
-                material="color: #1a5276; opacity: 0.6"
-                position="0.08 0 0.01"
-            ></a-entity>
-        </a-entity>
-
-        <!-- Filtr 2: Wąsy -->
-        <a-entity
-            geometry="primitive: box; width: 0.2; height: 0.02; depth: 0.01"
-            material="color: #000000"
-            position="0 -0.05 -0.2"
-            face-face="face: #face;"
-        ></a-entity>
-
-        <!-- Filtr 3: Korona/tiara -->
-        <a-entity
-            geometry="primitive: cone; radiusBottom: 0.15; radiusTop: 0.1; height: 0.05"
-            material="color: #FFD700"
-            position="0 0.25 -0.1"
-            rotation="0 0 0"
-            face-face="face: #face;"
-        ></a-entity>
-
-    </a-scene>
-
     <style>
         body {
             margin: 0;
             padding: 0;
-            background: #000;
+            overflow: hidden;
         }
-        
-        /* Informacja dla użytkownika */
-        .instruction {
+        #info {
             position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: white;
+            top: 10px;
+            left: 10px;
             background: rgba(0,0,0,0.7);
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-family: Arial, sans-serif;
-            text-align: center;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
             z-index: 1000;
+            font-family: Arial, sans-serif;
         }
     </style>
-
-    <div class="instruction">
-        🎭 Skieruj kamerę na swoją twarz aby zobaczyć filtry AR!
+</head>
+<body>
+    <div id="info">
+        <p>Skieruj kamerę na twarz</p>
+        <p id="status">Ładowanie...</p>
     </div>
+
+    <a-scene 
+        embedded 
+        arjs="sourceType: webcam; debugUIEnabled: false;"
+        renderer="logarithmicDepthBuffer: true;"
+        vr-mode-ui="enabled: false">
+        
+        <!-- Marker dla twarzy -->
+        <a-marker type="face" smooth="true" smoothCount="10" smoothTolerance="0.01">
+            <a-entity 
+                geometry="primitive: box; width: 0.3; height: 0.3; depth: 0.1"
+                material="color: #00FF00; opacity: 0.8"
+                position="0 0 0.1">
+            </a-entity>
+            
+            <!-- Tekst nad głową -->
+            <a-entity 
+                text="value: Witaj!; align: center; color: white; width: 2"
+                position="0 0.5 0"
+                scale="2 2 2">
+            </a-entity>
+            
+            <!-- Okulary AR -->
+            <a-entity 
+                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
+                material="color: #FF0000"
+                position="-0.08 0.1 0.05">
+            </a-entity>
+            <a-entity 
+                geometry="primitive: ring; radiusInner: 0.05; radiusOuter: 0.07"
+                material="color: #FF0000"
+                position="0.08 0.1 0.05">
+            </a-entity>
+        </a-marker>
+        
+        <a-entity camera></a-entity>
+    </a-scene>
+
+    <script>
+        // Informacje o statusie
+        const statusElement = document.getElementById('status');
+        
+        // Sprawdzenie wsparcia dla getUserMedia
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            statusElement.textContent = 'Kamera dostępna - szukam twarzy...';
+        } else {
+            statusElement.textContent = 'Błąd: Kamera niedostępna';
+        }
+
+        // Event listener dla wykrycia twarzy
+        document.querySelector('a-marker').addEventListener('markerFound', () => {
+            statusElement.textContent = 'Twarz wykryta! 🎉';
+            statusElement.style.color = '#00FF00';
+        });
+
+        document.querySelector('a-marker').addEventListener('markerLost', () => {
+            statusElement.textContent = 'Szukam twarzy...';
+            statusElement.style.color = 'white';
+        });
+
+        // Obsługa błędów
+        document.querySelector('a-scene').addEventListener('arjs-video-loaded', () => {
+            console.log('Wideo załadowane');
+        });
+
+        document.querySelector('a-scene').addEventListener('error', (e) => {
+            console.error('Błąd AR:', e.detail);
+            statusElement.textContent = 'Błąd: ' + e.detail;
+            statusElement.style.color = '#FF0000';
+        });
+    </script>
 </body>
 </html>
